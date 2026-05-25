@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.net.wifi.WifiInfo
+import com.abdapps.visorwifi.model.LatencyPoint
 import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.Build

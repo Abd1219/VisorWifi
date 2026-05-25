@@ -1,4 +1,4 @@
-package com.abdapps.visorwifi
+package com.abdapps.visorwifi.model
 
 /**
  * Representa un punto de medición de latencia y estado de red inalámbrica en un instante de tiempo.
