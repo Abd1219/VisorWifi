@@ -189,9 +189,9 @@ class NetworkMonitorService : Service() {
                 val lanResult = lanDeferred.await()
                 val wanResult = wanDeferred.await()
 
-                // 5. Simulación de respaldo (Fallback) de alta fidelidad si la interfaz de red está inactiva o incomunicada
-                val lanLatency = if (lanResult > 0) lanResult else getSimulatedLatency(isLan = true)
-                val wanLatency = if (wanResult > 0) wanResult else getSimulatedLatency(isLan = false)
+                // 5. Reportar mediciones reales directamente. Si fallan (valor -1f), se reportan como tal para reflejar la realidad.
+                val lanLatency = lanResult
+                val wanLatency = wanResult
 
                 // 6. Construir el nuevo punto de latencia telemétrico
                 val point = LatencyPoint(

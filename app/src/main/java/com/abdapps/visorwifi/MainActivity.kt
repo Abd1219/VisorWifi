@@ -400,7 +400,11 @@ fun LatencyMonitorScreen(
                 onClick = {
                     if (isServiceRunning) {
                         onStopService()
-                        chartRef?.clear()
+                        // Resetear la gráfica de forma limpia sin destruir los ejes ni el viewport
+                        chartRef?.data = LineData(
+                            createDataSet(ArrayList(), "LAN (Acceso Local)", "#00F0FF"),
+                            createDataSet(ArrayList(), "WAN (Internet)", "#D946EF")
+                        )
                         chartRef?.invalidate()
                     } else {
                         startWithPermissions()
