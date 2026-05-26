@@ -127,7 +127,9 @@ fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
 
     history.forEachIndexed { index, point ->
         val x = index.toFloat()
-        // Filtrar mediciones con error/timeouts (-1f) para evitar caídas a cero erróneas en la visualización
+        // Filtrar mediciones con error/timeouts (-1f) para evitar caídas a cero erróneas en la visualización.
+        // CORRECCIÓN: Si AMBOS valores son -1 aún así necesitamos avanzar el índice X;
+        // de lo contrario aceptamos puntos individuales (uno puede fallar y el otro ser válido).
         if (point.lanLatency >= 0) lanEntries.add(Entry(x, point.lanLatency))
         if (point.wanLatency >= 0) wanEntries.add(Entry(x, point.wanLatency))
     }
@@ -139,12 +141,15 @@ fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
     chart.data = lineData
     chart.notifyDataSetChanged()
 
-    // Ajusta la ventana visual a los últimos 60 segundos si el historial supera dicho umbral
+    // CORRECCIÓN: siempre posicionar el viewport para que la gráfica sea visible.
+    // Si hay más de 60 puntos, mostrar la ventana de los últimos 60 y hacer scroll al final.
+    // Si hay pocos puntos, posicionar en el origen (x=0) para que se vean desde el inicio.
     if (history.size > 60) {
         chart.setVisibleXRangeMaximum(60f)
         chart.moveViewToX((history.size - 1).toFloat())
     } else {
         chart.setVisibleXRangeMaximum(60f)
+        chart.moveViewToX(0f)  // CORRECCIÓN: sin esto el viewport puede quedar desplazado y vacío
     }
 
     chart.invalidate()

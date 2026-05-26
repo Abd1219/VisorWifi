@@ -1,5 +1,7 @@
 package com.abdapps.visorwifi.ui.screens
 
+import android.util.Log
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -131,25 +133,30 @@ fun LatencyMonitorScreen(
         }
     }
 
-    // Escucha de manera reactiva y asíncrona la emisión de nuevos puntos de latencia desde el servicio
+    // Escucha de manera reactiva y asíncrona la emisión de nuevos puntos de latencia desde el servicio.
+    // CORRECCIÓN: Si el servicio se desconecta temporalmente (ej. onStop/onStart del ciclo de vida),
+    // NO borramos historyList para que la gráfica mantenga los datos visibles.
     LaunchedEffect(service) {
         if (service != null) {
             // Inicializar la pantalla con los datos históricos existentes en el búfer del servicio
             val history = service.getHistoryCopy()
-            historyList = history
-            if (history.isNotEmpty()) latestPoint = history.last()
+            // Solo reemplazamos el historial si el servicio tiene datos más completos
+            if (history.isNotEmpty()) {
+                historyList = history
+                latestPoint = history.last()
+            }
             roamEvents = service.getRoamEventsCopy()
 
             // Colecciona los elementos emitidos por el flujo reactivo
             service.latencyFlow.collect { point ->
                 latestPoint = point
-                // Mantener el historial sincronizado y acotado al búfer máximo
+                // Actualizamos el historial manteniendo sólo los últimos 600 puntos
                 historyList = (historyList + point).takeLast(600)
+                Log.d("LatencyMonitor", "Nuevo punto: $point, tamaño historial: ${historyList.size}")
             }
-        } else {
-            latestPoint = null
-            historyList = emptyList()
         }
+        // NOTA: No borramos datos cuando service == null (desconexión temporal del binding)
+        // Los datos sólo se limpian explícitamente cuando el usuario presiona DETENER
     }
 
     // Escucha reactiva separada dedicada a registrar eventos de Roaming y cambio de red
@@ -231,30 +238,32 @@ fun LatencyMonitorScreen(
             }
 
             // Botón interactivo de monitoreo
-            Button(
-                onClick = {
-                    if (isServiceRunning) {
-                        onStopService()
-                        historyList = emptyList()
-                    } else {
-                        startWithPermissions()
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isServiceRunning) Color(0xFFFF3366)
-                                     else Color(0xFF00F0FF),
-                    contentColor = Color.Black
-                ),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
-            ) {
-                Text(
-                    text = if (isServiceRunning) "DETENER" else "MONITOREAR",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    letterSpacing = 0.5.sp
-                )
-            }
+        // Botón interactivo de monitoreo
+        Button(
+            onClick = {
+                if (isServiceRunning) {
+                    onStopService()
+                    historyList = emptyList()
+                    Log.d("LatencyMonitor", "Service stopped, history cleared")
+                } else {
+                    startWithPermissions()
+                }
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isServiceRunning) Color(0xFFFF3366)
+                                 else Color(0xFF00F0FF),
+                contentColor = Color.Black
+            ),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = if (isServiceRunning) "DETENER" else "MONITOREAR",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                letterSpacing = 0.5.sp
+            )
+        }
         }
 
         // ── Tarjetas de Latencia LAN y WAN Instantáneas ────────────────────
@@ -281,7 +290,6 @@ fun LatencyMonitorScreen(
                 } ?: "-- ms"
             )
         }
-
         // ── Tarjeta de Detalles e Información de Conexión WiFi ────────────
         WifiInfoCard(latestPoint = latestPoint, service = service)
 
@@ -311,6 +319,13 @@ fun LatencyMonitorScreen(
                 )
             }
         }
+        // Mostrar número de puntos de historial para depuración
+        Text(
+            text = "Puntos: ${historyList.size}",
+            fontSize = 12.sp,
+            color = Color(0xFF8E9AA8),
+            modifier = Modifier.padding(top = 4.dp)
+        )
 
         // ── Registro e Historial Visual de Cambios de Antena / Roaming ──────
         if (roamEvents.isNotEmpty() || isServiceRunning) {

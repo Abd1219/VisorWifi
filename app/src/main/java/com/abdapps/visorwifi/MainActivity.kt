@@ -1,5 +1,6 @@
 package com.abdapps.visorwifi
 
+import com.abdapps.visorwifi.ui.screens.LatencyMonitorScreen
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -17,7 +18,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
-import com.abdapps.visorwifi.ui.screens.LatencyMonitorScreen
 import com.abdapps.visorwifi.ui.theme.VisorWifiTheme
 
 /**
@@ -83,8 +83,9 @@ class MainActivity : ComponentActivity() {
         // Habilita el renderizado de borde a borde (Edge-to-Edge)
         enableEdgeToEdge()
 
-        // Si la app se abre y el servicio ya está corriendo, realiza el binding inmediatamente.
-        if (isServiceRunning(this, NetworkMonitorService::class.java)) {
+        // Al crear la actividad, intenta enlazar al servicio si aún no está enlazado.
+        // Eliminamos la verificación de actividad que puede ser inexacta.
+        if (!isServiceBound.value) {
             bindToService()
         }
 
@@ -110,7 +111,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         // Garantizar el enlace al servicio al volver a poner la Actividad en primer plano
-        if (isServiceRunning(this, NetworkMonitorService::class.java)) {
+        // Al volver a primer plano, enlazamos al servicio si no está ya enlazado.
+        if (!isServiceBound.value) {
             bindToService()
         }
     }
@@ -138,6 +140,8 @@ class MainActivity : ComponentActivity() {
         unbindFromService()
         val intent = Intent(this, NetworkMonitorService::class.java)
         stopService(intent)
+        // Limpiar explícitamente la referencia del servicio solo cuando el usuario lo detiene
+        serviceInstance.value = null
         isServiceRunningState.value = false
     }
 
@@ -153,12 +157,15 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Cancela la vinculación activa al servicio de monitoreo.
+     * CORRECCIÓN: Preservamos el estado del servicio en memoria (serviceInstance) para
+     * que la gráfica no pierda datos al pasar por el ciclo onStop/onStart.
+     * Solo limpiamos serviceInstance cuando el usuario detiene explícitamente el servicio.
      */
     private fun unbindFromService() {
         if (isServiceBound.value) {
             unbindService(connection)
             isServiceBound.value = false
-            serviceInstance.value = null
+            // NO ponemos serviceInstance.value = null aquí para no borrar la gráfica
             networkService = null
         }
     }
