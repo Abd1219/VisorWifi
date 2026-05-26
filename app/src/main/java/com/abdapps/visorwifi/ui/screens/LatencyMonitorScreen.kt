@@ -47,12 +47,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
 import com.abdapps.visorwifi.NetworkMonitorService
 import com.abdapps.visorwifi.model.LatencyPoint
+import com.abdapps.visorwifi.ui.components.DiagnosisCard
 import com.abdapps.visorwifi.ui.components.LatencyCard
 import com.abdapps.visorwifi.ui.components.LatencyChart
 import com.abdapps.visorwifi.ui.components.RoamingEventLog
 import com.abdapps.visorwifi.ui.components.WifiInfoCard
+import com.abdapps.visorwifi.viewmodel.NetworkDiagnosisViewModel
 import java.util.Locale
 
 /**
@@ -81,6 +85,10 @@ fun LatencyMonitorScreen(
     var latestPoint by remember { mutableStateOf<LatencyPoint?>(null) }
     var historyList by remember { mutableStateOf<List<LatencyPoint>>(emptyList()) }
     var roamEvents by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // ViewModel del diagnóstico de red — ciclo de vida vinculado al Activity
+    val diagnosisViewModel: NetworkDiagnosisViewModel = viewModel()
+    val diagnosisState by diagnosisViewModel.diagnosisState.collectAsState()
     
     // Almacena dinámicamente si se cuenta con el permiso de ubicación del GPS
     var hasLocationPermission by remember {
@@ -153,6 +161,8 @@ fun LatencyMonitorScreen(
                 // Actualizamos el historial manteniendo solo los últimos 600 puntos
                 historyList = (historyList + point).takeLast(600)
                 Log.d("LatencyMonitor", "Nuevo punto: $point, tamaño historial: ${historyList.size}")
+                // Notifica al ViewModel de diagnóstico con las métricas actualizadas
+                diagnosisViewModel.updateFromMetrics(historyList, point.rssi)
             }
         }
         // NOTA: No borramos datos cuando service == null (desconexión temporal del binding)
@@ -326,6 +336,9 @@ fun LatencyMonitorScreen(
             color = Color(0xFF8E9AA8),
             modifier = Modifier.padding(top = 4.dp)
         )
+
+        // ── Diagnóstico de Red ────────────────────────────────────────────────
+        DiagnosisCard(state = diagnosisState)
 
         // ── Registro e Historial Visual de Cambios de Antena / Roaming ──────
         if (roamEvents.isNotEmpty() || isServiceRunning) {

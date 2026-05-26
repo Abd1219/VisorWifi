@@ -52,6 +52,9 @@ dependencies {
     // MPAndroidChart para graficar en tiempo real
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
 
+    // ViewModel + StateFlow para Jetpack Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
