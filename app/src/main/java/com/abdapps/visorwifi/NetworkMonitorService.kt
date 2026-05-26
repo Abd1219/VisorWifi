@@ -452,6 +452,13 @@ class NetworkMonitorService : Service() {
     }
 
     /**
+     * Indica si el bucle de monitoreo está actualmente activo.
+     */
+    fun isMonitoring(): Boolean {
+        return job?.isActive == true
+    }
+
+    /**
      * Expone una copia inmutable del búfer circular de historial para evitar
      * excepciones de modificación concurrente en los hilos de renderizado UI.
      */

@@ -1,6 +1,8 @@
 package com.abdapps.visorwifi.ui.components
 
 import android.graphics.Color
+import android.util.Log
+import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -12,6 +14,7 @@ import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
+import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import java.util.ArrayList
 
 /**
@@ -30,6 +33,10 @@ fun LatencyChart(
     AndroidView(
         factory = { ctx ->
             LineChart(ctx).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
                 setupChartStyling(this)
             }
         },
@@ -122,6 +129,7 @@ fun setupChartStyling(chart: LineChart) {
  * @param history Colección de puntos de medición previos.
  */
 fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
+    Log.d("LatencyChart", "populateChartWithHistory: history size = ${history.size}")
     val lanEntries = ArrayList<Entry>()
     val wanEntries = ArrayList<Entry>()
 
@@ -134,10 +142,21 @@ fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
         if (point.wanLatency >= 0) wanEntries.add(Entry(x, point.wanLatency))
     }
 
-    val lanDataSet = createDataSet(lanEntries, "LAN (Acceso Local)", "#00F0FF")
-    val wanDataSet = createDataSet(wanEntries, "WAN (Internet)", "#D946EF")
+    val dataSets = ArrayList<ILineDataSet>()
+    if (lanEntries.isNotEmpty()) {
+        dataSets.add(createDataSet(lanEntries, "LAN (Acceso Local)", "#00F0FF"))
+    }
+    if (wanEntries.isNotEmpty()) {
+        dataSets.add(createDataSet(wanEntries, "WAN (Internet)", "#D946EF"))
+    }
 
-    val lineData = LineData(lanDataSet, wanDataSet)
+    if (dataSets.isEmpty()) {
+        chart.clear()
+        chart.invalidate()
+        return
+    }
+
+    val lineData = LineData(dataSets)
     chart.data = lineData
     chart.notifyDataSetChanged()
 
@@ -170,7 +189,9 @@ fun createDataSet(entries: ArrayList<Entry>, label: String, colorHex: String): L
         lineWidth = 2.2f
         setDrawCircles(false) // Deshabilita los puntos marcadores para mejorar el rendimiento
         setDrawCircleHole(false)
-        mode = LineDataSet.Mode.CUBIC_BEZIER // Curvas suaves
+        // Usamos HORIZONTAL_BEZIER que es más estable ante saltos/picos de latencia.
+        // Fallback a LINEAR si hay menos de 3 puntos para prevenir errores de rendering en la curva.
+        mode = if (entries.size >= 3) LineDataSet.Mode.HORIZONTAL_BEZIER else LineDataSet.Mode.LINEAR
         cubicIntensity = 0.12f
         setDrawValues(false)
         setDrawFilled(true) // Área de sombra bajo la curva

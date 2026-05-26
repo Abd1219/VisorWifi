@@ -150,7 +150,7 @@ fun LatencyMonitorScreen(
             // Colecciona los elementos emitidos por el flujo reactivo
             service.latencyFlow.collect { point ->
                 latestPoint = point
-                // Actualizamos el historial manteniendo sólo los últimos 600 puntos
+                // Actualizamos el historial manteniendo solo los últimos 600 puntos
                 historyList = (historyList + point).takeLast(600)
                 Log.d("LatencyMonitor", "Nuevo punto: $point, tamaño historial: ${historyList.size}")
             }

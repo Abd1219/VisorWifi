@@ -60,10 +60,11 @@ class MainActivity : ComponentActivity() {
          */
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as? NetworkMonitorService.LocalBinder
-            networkService = localBinder?.getService()
-            serviceInstance.value = networkService
+            val service = localBinder?.getService()
+            networkService = service
+            serviceInstance.value = service
             isServiceBound.value = true
-            isServiceRunningState.value = true
+            isServiceRunningState.value = service?.isMonitoring() == true
         }
 
         /**
@@ -130,6 +131,7 @@ class MainActivity : ComponentActivity() {
     private fun startMonitorService() {
         val intent = Intent(this, NetworkMonitorService::class.java)
         ContextCompat.startForegroundService(this, intent)
+        isServiceRunningState.value = true
         bindToService()
     }
 
