@@ -1,10 +1,9 @@
 package com.abdapps.visorwifi.ui.screens
 
-import android.util.Log
-
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,10 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
@@ -32,6 +29,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.collectAsState
 import com.abdapps.visorwifi.NetworkMonitorService
 import com.abdapps.visorwifi.model.LatencyPoint
 import com.abdapps.visorwifi.ui.components.DiagnosisCard
@@ -329,13 +326,6 @@ fun LatencyMonitorScreen(
                 )
             }
         }
-        // Mostrar número de puntos de historial para depuración
-        Text(
-            text = "Puntos: ${historyList.size}",
-            fontSize = 12.sp,
-            color = Color(0xFF8E9AA8),
-            modifier = Modifier.padding(top = 4.dp)
-        )
 
         // ── Diagnóstico de Red ────────────────────────────────────────────────
         DiagnosisCard(state = diagnosisState)
