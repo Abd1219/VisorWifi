@@ -2,9 +2,12 @@ package com.abdapps.visorwifi.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +36,7 @@ import androidx.compose.ui.unit.sp
  * @param sublabel Descripción secundaria o aclaratoria de la tarjeta (ej. "Acceso Local").
  * @param accentColor Color característico de acento para el indicador y el borde degradado.
  * @param value Valor actual de la latencia formateado en milisegundos (ej. "4.5 ms" o "Timeout").
+ * @param packetLoss Porcentaje opcional de pérdida de paquetes para desplegar un badge de advertencia.
  */
 @Composable
 fun LatencyCard(
@@ -40,7 +44,8 @@ fun LatencyCard(
     label: String,
     sublabel: String,
     accentColor: Color,
-    value: String
+    value: String,
+    packetLoss: Float? = null
 ) {
     Card(
         modifier = modifier.border(
@@ -52,13 +57,37 @@ fun LatencyCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF121620))
     ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.Start) {
-            // Indicador de color de la métrica
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(accentColor)
-            )
+            // Indicador de color de la métrica y badge superior derecho si hay pérdida
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(accentColor)
+                )
+                
+                if (packetLoss != null && packetLoss > 0f) {
+                    val badgeColor = if (packetLoss > 5f) Color(0xFFFF3366) else Color(0xFFFF9900)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(badgeColor.copy(alpha = 0.12f))
+                            .border(0.5.dp, badgeColor.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = String.format(java.util.Locale.US, "Pérdida: %.0f%%", packetLoss),
+                            color = badgeColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             // Títulos y descripciones
             Text(

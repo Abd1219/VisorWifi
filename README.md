@@ -1,6 +1,6 @@
 # VisorWifi 📡📶
 
-**VisorWifi** es una aplicación móvil moderna para Android diseñada para monitorear y analizar el rendimiento, la latencia y la itinerancia (roaming) de redes inalámbricas en tiempo real. 
+**VisorWifi** es una aplicación móvil moderna para Android diseñada para monitorear y analizar el rendimiento, la latencia, el jitter y la itinerancia (roaming) de redes inalámbricas en tiempo real. 
 
 Construida bajo los estándares modernos de desarrollo de Android con **Jetpack Compose** para una interfaz neo-brutalista premium y **Corrutinas de Kotlin** para el procesamiento concurrente eficiente en segundo plano.
 
@@ -8,14 +8,21 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
 
 ## 🚀 Características Principales
 
-*   **Monitoreo en Segundo Plano Continuo**: Funciona mediante un servicio en primer plano (**Foreground Service**) con una notificación persistente e interactiva. Los datos se siguen registrando incluso si sales de la aplicación o apagas la pantalla.
-*   **Medición Concurrente de Latencia ( LAN & WAN )**:
+*   **Monitoreo en Segundo Plano Continuo**: Funciona mediante un servicio en primer plano (**Foreground Service**) con una notificación persistente e interactiva. Los datos se siguen registrando de forma ininterrumpida incluso si sales de la aplicación o apagas la pantalla.
+*   **Medición Concurrente de Latencia (LAN & WAN)**:
     *   **LAN (Acceso Local)**: Mide el tiempo de respuesta (RTT) hacia la puerta de enlace (Gateway) del router de forma periódica cada segundo.
     *   **WAN (Internet)**: Mide el tiempo de respuesta hacia los servidores DNS públicos primarios (DNS de Google `8.8.8.8` y Cloudflare `1.1.1.1`).
+*   **Cálculo y Visualización de Jitter de Red**: Incorpora un overlay visual sumamente tenue en la gráfica de latencia que muestra el Jitter (variabilidad de la latencia) en tiempo real para un análisis profundo de la inestabilidad de la transmisión sin generar ruido visual en la UI.
+*   **Métricas de Pérdida de Paquetes**: Calcula dinámicamente el porcentaje de pérdida de paquetes sobre una ventana móvil de los últimos 100 puntos y despliega badges interactivos de alerta (naranja/rojo) en caso de detectar fallas o timeouts.
+*   **Motor de Diagnóstico Híbrido con Inteligencia Artificial**:
+    *   **Fase 1 (Heurísticas)**: Reglas físicas instantáneas basadas en límites y umbrales rígidos para detectar anomalías inmediatas.
+    *   **Fase 2 (IA Local y Determinista)**: Clasificador ligero de IA ([LightWeightClassifier](app/src/main/java/com/abdapps/visorwifi/engine/ia/LightWeightClassifier.kt)) que procesa ventanas estadísticas de telemetría de hasta 300 segundos.
+    *   **Fusión e Inferencia Híbrida**: Un orquestador inteligente ([HybridDiagnosisEngine](app/src/main/java/com/abdapps/visorwifi/engine/ia/HybridDiagnosisEngine.kt)) que combina ambas fases, resuelve discrepancias de diagnóstico y calcula la confianza de la clasificación para identificar causas complejas como *interferencia de canal Wi-Fi*, *señal deficiente* o *problemas del proveedor (ISP)*, ofreciendo recomendaciones dinámicas.
 *   **Mecanismos de Resiliencia (Fallback)**:
     *   **Ping ICMP nativo**: Ejecuta comandos de consola del sistema (`/system/bin/ping`) para obtener RTTs exactos.
     *   **Sockets TCP**: Si el tráfico ICMP/ping está bloqueado por el firewall de la red local, la app realiza un fallback automático iniciando conexiones TCP rápidas en puertos comunes (DNS `53` y HTTP `80`).
     *   **Simulación Telemétrica**: Si el adaptador de red está apagado o no hay WiFi disponible, se activa un generador de ruido blanco de alta fidelidad que simula latencias con fluctuaciones y picos reales para pruebas de desarrollo.
+*   **Historial de Intensidad de Señal RSSI**: Incorpora un gráfico dedicado ([RssiChart](app/src/main/java/com/abdapps/visorwifi/ui/components/RssiChart.kt)) que mapea en tiempo real la señal en dBm sobre líneas de umbrales técnicos preestablecidos (Bueno: -60 dBm, Regular: -70 dBm, Malo: -80 dBm) codificados por colores.
 *   **Detección de Roaming y Transición de Red**: 
     *   Registra en tiempo real cuando el dispositivo realiza itinerancia (**Roaming** inalámbrico al cambiar de antena/BSSID dentro del mismo SSID).
     *   Registra cambios de red completos (**SSID**) detallando la fuerza de la señal al momento de la transición.
@@ -23,7 +30,6 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   **Intensidad de Señal (RSSI)** cualitativa (Excelente, Muy Buena, Buena, Regular, Débil) y cuantitativa en dBm.
     *   **Banda de Frecuencia**: Clasificación automática del canal (2.4 GHz, 5 GHz y 6 GHz).
     *   **Velocidades Físicas (PHY Link Speeds)**: Tasas teóricas de transmisión (TX) y recepción (RX) en Mbps actualizadas en tiempo real (disponibles en API 29+).
-*   **Gráfica Neo-Brutalista en Tiempo Real**: Incorpora **MPAndroidChart** integrado en Compose mediante un `AndroidView`. Muestra curvas suaves de Bézier cúbicas con sombreado de área degradado para las latencias LAN y WAN, y scroll automático acotado a los últimos 60 segundos.
 
 ---
 
@@ -38,7 +44,7 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   `NotificationManager` & `NotificationChannel` (API 26+)
     *   `WifiManager` & `WifiInfo` (Telemetría de enlace)
     *   `ServiceConnection` (Binding y sincronización con estados Compose)
-*   **Visualización**: [MPAndroidChart](https://github.com/PhilJay/MPAndroidChart) (Gráficas de alto rendimiento)
+*   **Visualización**: [MPAndroidChart](https://github.com/PhilJay/MPAndroidChart) (Gráficas de alto rendimiento integradas en Compose via `AndroidView`)
 
 ---
 
@@ -46,9 +52,19 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
 
 El código fuente está completamente documentado y comentado en español bajo el estándar de **KDoc** para facilitar su comprensión:
 
-*   [LatencyPoint.kt](app/src/main/main/java/com/abdapps/visorwifi/LatencyPoint.kt): Modelo de datos inmutable que almacena la marca de tiempo, latencias locales/externas y telemetría de red.
-*   [NetworkMonitorService.kt](app/src/main/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Servicio en segundo plano que ejecuta el bucle de monitoreo de 1 segundo, gestiona pings/TCP fallbacks, almacena el buffer circular histórico y expone flujos reactivos.
-*   [MainActivity.kt](app/src/main/main/java/com/abdapps/visorwifi/MainActivity.kt): Actividad que implementa la UI neo-brutalista, gestiona la petición de permisos dinámicos (Ubicación y Notificaciones) e integra la gráfica en tiempo real interactiva.
+*   **Modelo de Datos**:
+    *   [LatencyPoint.kt](app/src/main/java/com/abdapps/visorwifi/model/LatencyPoint.kt): Almacena la telemetría recolectada por segundo (LAN, WAN, RSSI, BSSID, SSID, PHY Speeds).
+*   **Servicio & Lógica**:
+    *   [NetworkMonitorService.kt](app/src/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Gestiona el ciclo periódico de monitoreo a 1Hz, ejecuta pings/fallbacks de sockets, almacena el buffer histórico de sesión y expone los flujos reactivos.
+*   **Motor de Inteligencia Artificial (IA)**:
+    *   [NetworkDiagnosisEngine.kt](app/src/main/java/com/abdapps/visorwifi/engine/NetworkDiagnosisEngine.kt): Motor de Fase 1 para diagnósticos inmediatos basados en límites heurísticos rígidos.
+    *   [HybridDiagnosisEngine.kt](app/src/main/java/com/abdapps/visorwifi/engine/ia/HybridDiagnosisEngine.kt): Orquestador híbrido que fusiona los estados heurísticos (Fase 1) y los de IA (Fase 2).
+    *   [LightWeightClassifier.kt](app/src/main/java/com/abdapps/visorwifi/engine/ia/LightWeightClassifier.kt): Clasificador local por puntuación estadística ponderada para determinar la salud y atribución de problemas de red.
+*   **Interfaz de Usuario (UI)**:
+    *   [MainActivity.kt](app/src/main/java/com/abdapps/visorwifi/MainActivity.kt): Actividad principal, gestiona permisos dinámicos de ubicación y notificaciones, y controla el enlace bidireccional seguro del servicio.
+    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal Neo-Brutalista que unifica todas las tarjetas, flujos reactivos de Compose y paneles.
+    *   [LatencyChart.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/LatencyChart.kt): Renderizador nativo interoperable de latencias (LAN/WAN) con soporte dinámico para overlays de Jitter.
+    *   [RssiChart.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/RssiChart.kt): Gráfica nativa en tiempo real dedicada a mapear el comportamiento del RSSI.
 
 ---
 

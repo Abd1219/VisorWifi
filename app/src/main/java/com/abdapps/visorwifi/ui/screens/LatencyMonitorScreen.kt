@@ -53,6 +53,7 @@ import com.abdapps.visorwifi.ui.components.LatencyCard
 import com.abdapps.visorwifi.ui.components.LatencyChart
 import com.abdapps.visorwifi.ui.components.RoamingEventLog
 import com.abdapps.visorwifi.ui.components.WifiInfoCard
+import com.abdapps.visorwifi.ui.components.RssiChart
 import com.abdapps.visorwifi.viewmodel.NetworkDiagnosisViewModel
 import java.util.Locale
 
@@ -174,6 +175,15 @@ fun LatencyMonitorScreen(
         }
     }
 
+    // Calcular pérdida de paquetes sobre ventana móvil de los últimos 100 puntos telemétricos
+    val recentPoints = historyList.takeLast(100)
+    val lanLoss = if (recentPoints.isNotEmpty()) {
+        (recentPoints.count { it.lanLatency < 0 }.toFloat() / recentPoints.size) * 100f
+    } else 0f
+    val wanLoss = if (recentPoints.isNotEmpty()) {
+        (recentPoints.count { it.wanLatency < 0 }.toFloat() / recentPoints.size) * 100f
+    } else 0f
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -285,7 +295,8 @@ fun LatencyMonitorScreen(
                 accentColor = Color(0xFF00F0FF),
                 value = latestPoint?.let {
                     if (it.lanLatency >= 0) String.format(Locale.US, "%.1f ms", it.lanLatency) else "Timeout"
-                } ?: "-- ms"
+                } ?: "-- ms",
+                packetLoss = lanLoss
             )
             LatencyCard(
                 modifier = Modifier.weight(1f),
@@ -294,11 +305,38 @@ fun LatencyMonitorScreen(
                 accentColor = Color(0xFFD946EF),
                 value = latestPoint?.let {
                     if (it.wanLatency >= 0) String.format(Locale.US, "%.1f ms", it.wanLatency) else "Timeout"
-                } ?: "-- ms"
+                } ?: "-- ms",
+                packetLoss = wanLoss
             )
         }
         // ── Tarjeta de Detalles e Información de Conexión WiFi ────────────
         WifiInfoCard(latestPoint = latestPoint, service = service)
+
+        // ── Tarjeta de Historial de Intensidad de Señal RSSI ───────────────
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF263238), RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F141C))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = "HISTORIAL DE INTENSIDAD DE SEÑAL (RSSI)",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF536371),
+                    modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
+                )
+                
+                RssiChart(
+                    history = historyList,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .requiredHeight(220.dp)
+                )
+            }
+        }
 
         // ── Gráfica Dinámica en Tiempo Real (MPAndroidChart) ───────────────
         Card(
