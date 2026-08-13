@@ -55,6 +55,36 @@ object HybridDiagnosisEngine {
     }
 
     /**
+     * Evalúa el historial completo de la sesión sin truncar el historial para la inferencia de la IA.
+     * Diseñado para generar reportes consistentes sobre todo el período de monitoreo.
+     */
+    fun evaluateSession(
+        metrics: NetworkMetrics,
+        history: List<LatencyPoint>,
+        isIaEnabled: Boolean
+    ): DiagnosisState {
+        // 1. Obtener diagnóstico base de la Fase 1 (Reglas Heurísticas) sobre las métricas globales
+        val ruleState = NetworkDiagnosisEngine.evaluateDiagnosis(metrics)
+
+        if (!isIaEnabled) {
+            Log.d(TAG, "Diagnóstico híbrido completo - IA desactivada. Retornando Fase 1.")
+            return ruleState
+        }
+
+        // 2. Extraer características de todo el historial acumulado
+        val features = NetworkFeatures.fromHistory(history)
+
+        // 3. Ejecutar inferencia de IA local
+        val iaResult = LightWeightClassifier.classify(features)
+
+        // 4. Mapear salida de la IA a DiagnosisState
+        val iaState = mapIaResultToState(iaResult, features)
+
+        // 5. Integración y fusión inteligente de ambos diagnósticos
+        return combineDiagnoses(ruleState, iaState, metrics, features, iaResult)
+    }
+
+    /**
      * Mapea el resultado del clasificador de IA local a una estructura de estado legible.
      */
     private fun mapIaResultToState(iaResult: IaDiagnosisResult, features: NetworkFeatures): DiagnosisState {

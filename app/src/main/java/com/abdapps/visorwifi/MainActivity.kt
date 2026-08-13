@@ -28,6 +28,14 @@ import com.abdapps.visorwifi.ui.theme.VisorWifiTheme
  * 2. La inicialización y vinculación del servicio persistente en primer plano.
  * 3. La renderización de la pantalla principal pasándole las dependencias y estados limpios.
  */
+/**
+ * Pantallas principales de la aplicación.
+ */
+enum class AppScreen {
+    MONITOR,
+    AP_LOCATOR
+}
+
 class MainActivity : ComponentActivity() {
 
     /**
@@ -50,6 +58,11 @@ class MainActivity : ComponentActivity() {
      * Estado observable que define si el servicio está actualmente activo en segundo plano.
      */
     private val isServiceRunningState = mutableStateOf(false)
+
+    /**
+     * Estado observable de navegación de pantalla.
+     */
+    private val currentScreen = mutableStateOf(AppScreen.MONITOR)
 
     /**
      * Interfaz de comunicación con el servicio que gestiona los eventos de enlace (Binding).
@@ -85,7 +98,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         // Al crear la actividad, intenta enlazar al servicio si aún no está enlazado.
-        // Eliminamos la verificación de actividad que puede ser inexacta.
         if (!isServiceBound.value) {
             bindToService()
         }
@@ -96,14 +108,26 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color(0xFF0B0E14)
                 ) { innerPadding ->
-                    // Pantalla de monitoreo principal conectada a los flujos del servicio.
-                    LatencyMonitorScreen(
-                        modifier = Modifier.padding(innerPadding),
-                        service = serviceInstance.value,
-                        isServiceRunning = isServiceRunningState.value,
-                        onStartService = { startMonitorService() },
-                        onStopService = { stopMonitorService() }
-                    )
+                    when (currentScreen.value) {
+                        AppScreen.MONITOR -> {
+                            LatencyMonitorScreen(
+                                modifier = Modifier.padding(innerPadding),
+                                service = serviceInstance.value,
+                                isServiceRunning = isServiceRunningState.value,
+                                onStartService = { startMonitorService() },
+                                onStopService = { stopMonitorService() },
+                                onOpenApLocator = { currentScreen.value = AppScreen.AP_LOCATOR }
+                            )
+                        }
+                        AppScreen.AP_LOCATOR -> {
+                            com.abdapps.visorwifi.ui.screens.ApLocatorScreen(
+                                modifier = Modifier.padding(innerPadding),
+                                service = serviceInstance.value,
+                                latestPoint = serviceInstance.value?.getHistoryCopy()?.lastOrNull(),
+                                onNavigateBack = { currentScreen.value = AppScreen.MONITOR }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -167,7 +191,7 @@ class MainActivity : ComponentActivity() {
         if (isServiceBound.value) {
             unbindService(connection)
             isServiceBound.value = false
-            // NO ponemos serviceInstance.value = null aquí para no borrar la gráfica
+            // no ponemos serviceInstance.value = null aquí para no borrar la gráfica
             networkService = null
         }
     }

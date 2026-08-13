@@ -47,14 +47,25 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.abdapps.visorwifi.NetworkMonitorService
+import com.abdapps.visorwifi.analysis.PeriodAnalyzer
+import com.abdapps.visorwifi.analysis.PeriodStatusEvaluator
+import com.abdapps.visorwifi.engine.ia.HybridDiagnosisEngine
 import com.abdapps.visorwifi.model.LatencyPoint
+import com.abdapps.visorwifi.model.NetworkMetrics
+import com.abdapps.visorwifi.model.ReportData
+import com.abdapps.visorwifi.model.PdfGenerator
 import com.abdapps.visorwifi.ui.components.DiagnosisCard
 import com.abdapps.visorwifi.ui.components.LatencyCard
 import com.abdapps.visorwifi.ui.components.LatencyChart
 import com.abdapps.visorwifi.ui.components.RoamingEventLog
 import com.abdapps.visorwifi.ui.components.WifiInfoCard
 import com.abdapps.visorwifi.ui.components.RssiChart
+import com.abdapps.visorwifi.ui.components.ReportInputDialog
+import com.abdapps.visorwifi.ui.components.PdfPreviewDialog
 import com.abdapps.visorwifi.viewmodel.NetworkDiagnosisViewModel
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -77,12 +88,17 @@ fun LatencyMonitorScreen(
     service: NetworkMonitorService?,
     isServiceRunning: Boolean,
     onStartService: () -> Unit,
-    onStopService: () -> Unit
+    onStopService: () -> Unit,
+    onOpenApLocator: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var latestPoint by remember { mutableStateOf<LatencyPoint?>(null) }
     var historyList by remember { mutableStateOf<List<LatencyPoint>>(emptyList()) }
     var roamEvents by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var showInputDialog by remember { mutableStateOf(false) }
+    var showPreviewDialog by remember { mutableStateOf(false) }
+    var generatedFile by remember { mutableStateOf<File?>(null) }
 
     // ViewModel del diagnóstico de red — ciclo de vida vinculado al Activity
     val diagnosisViewModel: NetworkDiagnosisViewModel = viewModel()
@@ -193,23 +209,68 @@ fun LatencyMonitorScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ── Cabecera Premium Neo-Brutalista ────────────────────────────────
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.Start
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "VISOR WIFI",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Black,
-                color = Color(0xFF00F0FF),
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp
-            )
-            Text(
-                text = "Monitor de Red en Tiempo Real",
-                fontSize = 14.sp,
-                color = Color(0xFF8E9AA8)
-            )
+            Column {
+                Text(
+                    text = "VISOR WIFI",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF00F0FF),
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = "Monitor de Red en Tiempo Real",
+                    fontSize = 14.sp,
+                    color = Color(0xFF8E9AA8)
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onOpenApLocator,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF00F0FF),
+                        contentColor = Color.Black
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "📡 AP LOCATOR",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (historyList.size < 10) {
+                            Toast.makeText(context, "Se necesitan al menos 10 muestras para generar un reporte.", Toast.LENGTH_LONG).show()
+                        } else {
+                            showInputDialog = true
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0D9488),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "REPORTE",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
         }
 
         // ── Estado del Servicio + Botón de Control de Arranque/Parada ──────
@@ -394,6 +455,112 @@ fun LatencyMonitorScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+
+        // ── Diálogos de Reporte ───────────────────────────────────────────
+        if (showInputDialog) {
+            ReportInputDialog(
+                onDismiss = { showInputDialog = false },
+                onSubmit = { technician, site, notes, signature ->
+                    showInputDialog = false
+
+                    // ── 1. Análisis estadístico del PERIODO ─────────────────────────────────
+                    // Se analiza el historial COMPLETO capturado durante la sesión.
+                    // diagnosisState.status NO interviene en este cálculo.
+                    val periodAnalysis = PeriodAnalyzer.analyze(
+                        history = historyList,
+                        networkEvents = roamEvents
+                    )
+
+                    // ── 2. Evaluación del estado del PERIODO ────────────────────────────────
+                    // Función determinística: misma entrada → misma salida. Sin efectos laterales.
+                    val periodStatus = PeriodStatusEvaluator.evaluate(periodAnalysis)
+
+                    // ── 3. Datos de contexto del sitio (instantáneos, solo para encabezado) ─
+                    val currentPoint = latestPoint
+                    val wifiBand = currentPoint?.let { p ->
+                        service?.frequencyToBand(p.frequency)
+                    } ?: "Desconocida"
+                    val rssi    = currentPoint?.rssi ?: -127
+                    val phyRate = currentPoint?.let {
+                        if (it.txLinkSpeed > 0) it.txLinkSpeed else it.linkSpeed
+                    } ?: 0
+
+                    val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
+
+                    // ── 3.5. Diagnóstico de IA sobre el periodo completo (Historial completo de la sesión) ─
+                    val reportMetrics = NetworkMetrics.fromPeriodAnalysis(
+                        analysis = periodAnalysis,
+                        phyRateMbps = phyRate,
+                        latestRssi = rssi
+                    )
+                    val reportDiagnosis = HybridDiagnosisEngine.evaluateSession(
+                        metrics = reportMetrics,
+                        history = historyList,
+                        isIaEnabled = diagnosisViewModel.isIaEnabled
+                    )
+
+                    // ── 4. Conclusión ejecutiva basada en el análisis del periodo ───────────
+                    // Usa el reportDiagnosis (del periodo completo) para la recomendación,
+                    // y el estado del informe proviene exclusivamente de periodStatus.
+                    val periodStatusLabel = when (periodStatus) {
+                        com.abdapps.visorwifi.model.PeriodReportStatus.OPTIMAL   -> "óptimas"
+                        com.abdapps.visorwifi.model.PeriodReportStatus.DEGRADED  -> "degradadas"
+                        com.abdapps.visorwifi.model.PeriodReportStatus.UNSTABLE  -> "inestables"
+                        com.abdapps.visorwifi.model.PeriodReportStatus.CRITICAL  -> "críticas"
+                    }
+                    val executiveConclusion = buildString {
+                        append("Durante el periodo analizado (${ periodAnalysis.sampleCount } muestras), ")
+                        append("la red presentó condiciones $periodStatusLabel. ")
+                        append("Score de estabilidad: ${ periodAnalysis.stabilityScore }/100. ")
+                        append(reportDiagnosis.recommendation)
+                    }
+
+                    // ── 5. Construcción de ReportData ───────────────────────────────────────
+                    // periodStatus y periodAnalysis son la fuente de verdad del PDF.
+                    // reportDiagnosis (título, confianza, evidencias, recomendación) se calculó
+                    // a partir del historial completo de la sesión para evitar sesgo de tiempo real.
+                    val reportData = ReportData(
+                        dateTime           = formattedDate,
+                        technicianName     = technician,
+                        siteName           = site,
+                        periodStatus       = periodStatus,
+                        periodAnalysis     = periodAnalysis,
+                        diagnosisTitle     = reportDiagnosis.title,
+                        confidence         = reportDiagnosis.confidence,
+                        evidences          = reportDiagnosis.evidences,
+                        recommendation     = reportDiagnosis.recommendation,
+                        executiveConclusion = executiveConclusion,
+                        lanLatencyAvgMs    = periodAnalysis.avgLanLatencyMs,
+                        wanLatencyAvgMs    = periodAnalysis.avgWanLatencyMs,
+                        wifiBand           = wifiBand,
+                        rssiDbm            = rssi,
+                        phyRateMbps        = phyRate,
+                        latencyHistory     = historyList,
+                        networkEvents      = roamEvents,
+                        technicianNotes    = notes,
+                        technicianSignature = signature
+                    )
+
+                    try {
+                        val file = PdfGenerator.generateReport(context, reportData)
+                        generatedFile = file
+                        showPreviewDialog = true
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error al generar PDF: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
+
+        if (showPreviewDialog && generatedFile != null) {
+            PdfPreviewDialog(
+                file = generatedFile!!,
+                onDismiss = {
+                    showPreviewDialog = false
+                    generatedFile = null
+                }
+            )
         }
     }
 }

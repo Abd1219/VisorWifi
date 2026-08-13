@@ -14,6 +14,13 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   **WAN (Internet)**: Mide el tiempo de respuesta hacia los servidores DNS públicos primarios (DNS de Google `8.8.8.8` y Cloudflare `1.1.1.1`).
 *   **Cálculo y Visualización de Jitter de Red**: Incorpora un overlay visual sumamente tenue en la gráfica de latencia que muestra el Jitter (variabilidad de la latencia) en tiempo real para un análisis profundo de la inestabilidad de la transmisión sin generar ruido visual en la UI.
 *   **Métricas de Pérdida de Paquetes**: Calcula dinámicamente el porcentaje de pérdida de paquetes sobre una ventana móvil de los últimos 100 puntos y despliega badges interactivos de alerta (naranja/rojo) en caso de detectar fallas o timeouts.
+*   **Módulo AP Locator (Localización Estimada de Access Points)**:
+    *   **Selección de BSSID**: Muestra el AP actualmente conectado (SSID, BSSID, fabricante OUI, frecuencia, canal y RSSI) y permite seleccionar BSSIDs específicos.
+    *   **Calibración y Rotación 360°**: Guía al usuario para realizar un escaneo de orientación mientras mide continuamente el RSSI y calcula la cobertura angular.
+    *   **Motor de Estimación de Dirección (RssiDirectionAnalyzer)**: Algoritmo determinista puro que procesa las muestras mediante *Filtro de Mediana*, *Media Móvil*, *Binning Angular de 10°* y *Centroide Ponderado Circular*.
+    *   **Brújula Neo-Brutalista Interactiva**: Renderizado en Canvas Compose con doble referencia angular (azimut del teléfono vs flecha compensada en tiempo real hacia la dirección estimada del AP).
+    *   **Calculadora de Confianza (0–100%)**: Evalúa 5 factores clave (cantidad de muestras, rango RSSI, varianza de zona de pico, cobertura angular y consistencia) para informar la fiabilidad de la medición.
+    *   **Historial de Puntos de Medición**: Registra las estimaciones por posición física durante la sesión para comparación en campo.
 *   **Motor de Diagnóstico Híbrido con Inteligencia Artificial**:
     *   **Fase 1 (Heurísticas)**: Reglas físicas instantáneas basadas en límites y umbrales rígidos para detectar anomalías inmediatas.
     *   **Fase 2 (IA Local y Determinista)**: Clasificador ligero de IA ([LightWeightClassifier](app/src/main/java/com/abdapps/visorwifi/engine/ia/LightWeightClassifier.kt)) que procesa ventanas estadísticas de telemetría de hasta 300 segundos.
@@ -39,12 +46,13 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
 *   **Interfaz de Usuario**: [Jetpack Compose](https://developer.android.com/compose) (Material 3)
 *   **Concurrencia**: [Kotlin Coroutines](https://kotlinlang.org/docs/coroutines-overview.html) (`async`/`await`, `SupervisorJob`, `Dispatchers.IO`)
 *   **Reactividad**: [Kotlin Flows](https://kotlinlang.org/docs/flow.html) (`MutableSharedFlow`, reactividad sin hilos de UI bloqueados)
+*   **Sensores & Orientación**: `SensorManager` (`TYPE_ACCELEROMETER`, `TYPE_MAGNETIC_FIELD`, `TYPE_ROTATION_VECTOR`)
 *   **Componentes de Android**:
     *   `Service` (Foreground Service persistente)
     *   `NotificationManager` & `NotificationChannel` (API 26+)
     *   `WifiManager` & `WifiInfo` (Telemetría de enlace)
     *   `ServiceConnection` (Binding y sincronización con estados Compose)
-*   **Visualización**: [MPAndroidChart](https://github.com/PhilJay/MPAndroidChart) (Gráficas de alto rendimiento integradas en Compose via `AndroidView`)
+*   **Visualización**: [MPAndroidChart](https://github.com/PhilJay/MPAndroidChart) y Canvas nativo de Compose para la brújula interactiva
 
 ---
 
@@ -54,17 +62,20 @@ El código fuente está completamente documentado y comentado en español bajo e
 
 *   **Modelo de Datos**:
     *   [LatencyPoint.kt](app/src/main/java/com/abdapps/visorwifi/model/LatencyPoint.kt): Almacena la telemetría recolectada por segundo (LAN, WAN, RSSI, BSSID, SSID, PHY Speeds).
+    *   [Modelos AP Locator](app/src/main/java/com/abdapps/visorwifi/model/aplocator/): Modelos inmutables (`RssiOrientationSample`, `DirectionEstimate`, `MeasurementPoint`, `ApInfo`, `ApLocatorSession`).
 *   **Servicio & Lógica**:
-    *   [NetworkMonitorService.kt](app/src/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Gestiona el ciclo periódico de monitoreo a 1Hz, ejecuta pings/fallbacks de sockets, almacena el buffer histórico de sesión y expone los flujos reactivos.
-*   **Motor de Inteligencia Artificial (IA)**:
-    *   [NetworkDiagnosisEngine.kt](app/src/main/java/com/abdapps/visorwifi/engine/NetworkDiagnosisEngine.kt): Motor de Fase 1 para diagnósticos inmediatos basados en límites heurísticos rígidos.
-    *   [HybridDiagnosisEngine.kt](app/src/main/java/com/abdapps/visorwifi/engine/ia/HybridDiagnosisEngine.kt): Orquestador híbrido que fusiona los estados heurísticos (Fase 1) y los de IA (Fase 2).
-    *   [LightWeightClassifier.kt](app/src/main/java/com/abdapps/visorwifi/engine/ia/LightWeightClassifier.kt): Clasificador local por puntuación estadística ponderada para determinar la salud y atribución de problemas de red.
+    *   [NetworkMonitorService.kt](app/src/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Monitoreo a 1Hz, fallbacks TCP, búfer circular e históric de roaming.
+    *   [SensorOrientationManager.kt](app/src/main/java/com/abdapps/visorwifi/aplocator/SensorOrientationManager.kt): Gestor de sensores de acelerómetro y magnetómetro con suavizado de paso bajo.
+*   **Motor AP Locator & Diagnóstico**:
+    *   [RssiDirectionAnalyzer.kt](app/src/main/java/com/abdapps/visorwifi/engine/aplocator/RssiDirectionAnalyzer.kt): Algoritmo determinista puro de filtrado y estimación angular.
+    *   [ConfidenceCalculator.kt](app/src/main/java/com/abdapps/visorwifi/engine/aplocator/ConfidenceCalculator.kt): Ponderador de 5 factores de confianza de estimación.
+    *   [NetworkDiagnosisEngine.kt](app/src/main/java/com/abdapps/visorwifi/engine/NetworkDiagnosisEngine.kt): Motor de Fase 1 para diagnósticos heurísticos inmediatos.
+    *   [HybridDiagnosisEngine.kt](app/src/main/java/com/abdapps/visorwifi/engine/ia/HybridDiagnosisEngine.kt): Orquestador híbrido heurística + IA.
 *   **Interfaz de Usuario (UI)**:
-    *   [MainActivity.kt](app/src/main/java/com/abdapps/visorwifi/MainActivity.kt): Actividad principal, gestiona permisos dinámicos de ubicación y notificaciones, y controla el enlace bidireccional seguro del servicio.
-    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal Neo-Brutalista que unifica todas las tarjetas, flujos reactivos de Compose y paneles.
-    *   [LatencyChart.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/LatencyChart.kt): Renderizador nativo interoperable de latencias (LAN/WAN) con soporte dinámico para overlays de Jitter.
-    *   [RssiChart.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/RssiChart.kt): Gráfica nativa en tiempo real dedicada a mapear el comportamiento del RSSI.
+    *   [MainActivity.kt](app/src/main/java/com/abdapps/visorwifi/MainActivity.kt): Actividad principal con navegación Compose.
+    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal de monitoreo en tiempo real.
+    *   [ApLocatorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/ApLocatorScreen.kt): Pantalla declarativa completa del módulo AP Locator (3 estados).
+    *   [CompassView.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/aplocator/CompassView.kt): Brújula nativa interactiva en Canvas Compose.
 
 ---
 

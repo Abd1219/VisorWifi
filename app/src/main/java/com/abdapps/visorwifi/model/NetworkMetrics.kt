@@ -23,4 +23,23 @@ data class NetworkMetrics(
     val rssiDbm: Int,
     val phyRateMbps: Int,
     val packetLossPercent: Float?
-)
+) {
+    companion object {
+        fun fromPeriodAnalysis(
+            analysis: PeriodAnalysis,
+            phyRateMbps: Int,
+            latestRssi: Int
+        ): NetworkMetrics {
+            return NetworkMetrics(
+                lanLatencyAvgMs = analysis.avgLanLatencyMs,
+                lanLatencyMaxMs = analysis.maxLanLatencyMs,
+                wanLatencyAvgMs = analysis.avgWanLatencyMs,
+                wanLatencyMaxMs = analysis.maxWanLatencyMs,
+                jitterMs = analysis.avgJitterMs,
+                rssiDbm = if (latestRssi > -127) latestRssi else analysis.rssiAvg.toInt(),
+                phyRateMbps = phyRateMbps,
+                packetLossPercent = analysis.packetLossPercent
+            )
+        }
+    }
+}

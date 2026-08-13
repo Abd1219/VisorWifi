@@ -47,6 +47,17 @@
                 android:value="Network latency diagnostics monitoring" />
         </service>
 
+        <!-- FileProvider para compartir archivos de reporte PDF -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.abdapps.visorwifi.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>
