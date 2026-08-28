@@ -88,16 +88,16 @@ object PdfGenerator {
             textSize = 18f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText("VISOR WIFI", MARGIN, currentY + 16f, titlePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText("VISOR WIFI"), MARGIN, currentY + 16f, titlePaint)
 
         val reportTypePaint = TextPaint().apply {
             color = Color.parseColor("#0284C7") // Azul Tech
             textSize = 11f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText(data.reportType.uppercase(Locale.getDefault()), MARGIN, currentY + 32f, reportTypePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText(data.reportType.uppercase(Locale.getDefault())), MARGIN, currentY + 32f, reportTypePaint)
 
         // Metadatos de la cabecera (Fecha, Técnico, Sitio)
         val metaPaint = TextPaint().apply {
@@ -105,11 +105,11 @@ object PdfGenerator {
             textSize = 8.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         val rightAlignX = PAGE_WIDTH - MARGIN - 160f
-        canvas.drawText("Fecha/Hora: ${data.dateTime}", rightAlignX, currentY + 14f, metaPaint)
-        canvas.drawText("Técnico: ${data.technicianName}", rightAlignX, currentY + 26f, metaPaint)
-        canvas.drawText("Sitio: ${data.siteName}", rightAlignX, currentY + 38f, metaPaint)
+        canvas.drawText(sanitizePdfText("Fecha/Hora: ${data.dateTime}"), rightAlignX, currentY + 14f, metaPaint)
+        canvas.drawText(sanitizePdfText("Técnico: ${data.technicianName}"), rightAlignX, currentY + 26f, metaPaint)
+        canvas.drawText(sanitizePdfText("Sitio: ${data.siteName}"), rightAlignX, currentY + 38f, metaPaint)
 
         currentY += 52f
 
@@ -122,7 +122,7 @@ object PdfGenerator {
         canvas.drawLine(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY, linePaint)
         currentY += 16f
 
-        // 2. Resumen Ejecutivo (Ejecutive Summary Card)
+        // 2. Resumen Ejecutivo (Executive Summary Card)
         val cardPaint = Paint().apply {
             style = Paint.Style.FILL
             isAntiAlias = true
@@ -134,7 +134,6 @@ object PdfGenerator {
         }
 
         // Elegir color según el estado del PERIODO analizado (no el estado instantáneo)
-        // Mapeo intencional: PeriodReportStatus ≠ DiagnosisStatus
         val (statusText, statusColor, cardBg) = when (data.periodStatus) {
             PeriodReportStatus.OPTIMAL   -> Triple("ESTADO DEL PERIODO: ÓPTIMO",    "#16A34A", "#F0FDF4") // Verde
             PeriodReportStatus.DEGRADED  -> Triple("ESTADO DEL PERIODO: DEGRADADO", "#EA580C", "#FFF7ED") // Naranja
@@ -157,8 +156,8 @@ object PdfGenerator {
             textSize = 10f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText(statusText, MARGIN + 12f, currentY + 18f, cardTextTitlePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText(statusText), MARGIN + 12f, currentY + 18f, cardTextTitlePaint)
 
         // Rango temporal del periodo analizado
         val periodSdf = java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -166,18 +165,18 @@ object PdfGenerator {
         val periodEndStr   = periodSdf.format(java.util.Date(data.periodAnalysis.periodEndMs))
         val durationSecs   = (data.periodAnalysis.periodEndMs - data.periodAnalysis.periodStartMs) / 1000L
         val durationStr    = when {
-            durationSecs < 60  -> "${durationSecs}s"
+            durationSecs < 60   -> "${durationSecs}s"
             durationSecs < 3600 -> "${durationSecs / 60}m ${durationSecs % 60}s"
-            else               -> "${durationSecs / 3600}h ${(durationSecs % 3600) / 60}m"
+            else                -> "${durationSecs / 3600}h ${(durationSecs % 3600) / 60}m"
         }
         val periodLabelPaint = TextPaint().apply {
             color = Color.parseColor("#64748B")
             textSize = 7.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         canvas.drawText(
-            "Periodo analizado: $periodStartStr – $periodEndStr  (≈ $durationStr, ${data.periodAnalysis.sampleCount} muestras)",
+            sanitizePdfText("Periodo analizado: $periodStartStr - $periodEndStr (~ $durationStr, ${data.periodAnalysis.sampleCount} muestras)"),
             MARGIN + 12f, currentY + 30f, periodLabelPaint
         )
 
@@ -194,8 +193,8 @@ object PdfGenerator {
             textSize = 8f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText(scoreLabel, MARGIN + 12f, currentY + 42f, scorePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText(scoreLabel), MARGIN + 12f, currentY + 42f, scorePaint)
 
         // Conclusión ejecutiva (texto libre, debajo del score)
         val cardTextPaint = TextPaint().apply {
@@ -203,7 +202,7 @@ object PdfGenerator {
             textSize = 8f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         val textWidth = PAGE_WIDTH - (MARGIN * 2) - 24f
         drawTextWrapped(
             canvas = canvas,
@@ -220,25 +219,25 @@ object PdfGenerator {
             textSize = 6.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         canvas.drawText(
-            "⚠️ Este estado resume el comportamiento del enlace durante el periodo completo, no el último instante.",
+            sanitizePdfText("[!] Este estado resume el comportamiento del enlace durante el periodo completo, no el último instante."),
             MARGIN + 12f, currentY + cardHeight - 6f, notePaint
         )
 
         currentY += cardHeight + 18f
 
-        // 3. Tabla de Indicadores Clave
+        // 3. Tabla de Indicadores Clave (4 Columnas)
         val secTitlePaint = TextPaint().apply {
             color = Color.parseColor("#0F172A")
             textSize = 11f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText("Métricas del Periodo Analizado", MARGIN, currentY, secTitlePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText("Métricas del Periodo Analizado"), MARGIN, currentY, secTitlePaint)
         currentY += 8f
 
-        val colWidths = listOf(160f, 160f, 185f)
+        val colWidths = listOf(140f, 75f, 75f, 215f)
         val rowHeight = 18f
         val thBgPaint = Paint().apply { color = Color.parseColor("#F1F5F9") }
         val tdBgPaintEven = Paint().apply { color = Color.parseColor("#F8FAFC") }
@@ -249,57 +248,107 @@ object PdfGenerator {
             textSize = 8f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         val tableCellPaint = TextPaint().apply {
             color = Color.parseColor("#334155")
             textSize = 8f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             isAntiAlias = true
-        }
+        }.disableLigatures()
 
         // Encabezados de tabla
         drawTableRow(
             canvas, MARGIN, currentY, colWidths, rowHeight,
-            listOf("Métrica Evaluada", "Valor Obtenido", "Rango de Referencia / Estado"),
+            listOf("Métrica Evaluada", "Resultado", "Estado", "Rango de Referencia / Explicación"),
             tableHeaderPaint, thBgPaint
         )
         currentY += rowHeight
 
         // ─── Tabla de Indicadores de PERIODO ─────────────────────────────────────
-        // Nota: lanLatencyAvgMs y wanLatencyAvgMs en ReportData ya provienen de periodAnalysis.
-        val rssiText = "${data.rssiDbm} dBm (${rssiToQuality(data.rssiDbm)})"
-        val lanText  = if (data.lanLatencyAvgMs >= 0) String.format(Locale.US, "%.2f ms", data.lanLatencyAvgMs) else "Timeout"
-        val wanText  = if (data.wanLatencyAvgMs >= 0) String.format(Locale.US, "%.2f ms", data.wanLatencyAvgMs) else "Timeout"
-        val phyText  = "${data.phyRateMbps} Mbps"
-        val p        = data.periodAnalysis  // alias corto para legibilidad
+        val lanText = if (data.lanLatencyAvgMs >= 0) String.format(Locale.US, "%.2f ms", data.lanLatencyAvgMs) else "Timeout"
+        val wanText = if (data.wanLatencyAvgMs >= 0) String.format(Locale.US, "%.2f ms", data.wanLatencyAvgMs) else "Timeout"
+        val phyText = "${data.phyRateMbps} Mbps"
+        val p       = data.periodAnalysis
 
         val rows = listOf(
-            listOf("Latencia LAN prom. (Periodo)",  lanText,
-                "< 15 ms (Óptimo) | > 50 ms (Inestable)"),
-            listOf("Picos LAN > 50 ms (Periodo)",   "${p.lanSpikeCount} eventos",
-                "0 (Óptimo) | 1-4 (Degradado) | ≥5 (Crítico)"),
-            listOf("Latencia WAN prom. (Periodo)",  wanText,
-                "< 100 ms (Estable) | > 200 ms (Crítico)"),
-            listOf("Picos WAN > 200 ms (Periodo)",  "${p.latencySpikeCount} eventos",
-                "0-1 (Óptimo) | 2-4 (Degradado) | ≥10 (Crítico)"),
-            listOf("Pérdida de Paquetes WAN",        String.format(Locale.US, "%.1f%%", p.packetLossPercent),
-                "< 2% (Óptimo) | > 10% (Crítico)"),
-            listOf("Jitter WAN prom. (Periodo)",    String.format(Locale.US, "%.1f ms", p.avgJitterMs),
-                "< 15 ms (Óptimo) | > 50 ms (Inestable)"),
-            listOf("Jitter WAN máx. (Periodo)",     String.format(Locale.US, "%.1f ms", p.maxJitterMs),
-                "Referencia de estabilidad temporal"),
-            listOf("RSSI prom. en el periodo",       String.format(Locale.US, "%.1f dBm", p.rssiAvg),
-                "-30 a -65 dBm (Excelente) | < -80 dBm (Débil)"),
-            listOf("RSSI mínimo en el periodo",      "${p.rssiMin.toInt()} dBm",
-                "Peor señal registrada; impacto en estabilidad"),
-            listOf("Varianza de señal RSSI",         String.format(Locale.US, "%.1f dBm²", p.rssiVariance),
-                "< 10 (Estable) | > 30 (Fluctuante)"),
-            listOf("Velocidad Física del Enlace",    phyText,
-                "Depende del estándar (Máx disponible)"),
-            listOf("Banda Wi-Fi Activa",             data.wifiBand,
-                "2.4 GHz (Cobertura) / 5 u 6 GHz (Velocidad)"),
-            listOf("Eventos de Roaming (Periodo)",   "${p.roamingEventsCount} roaming | ${p.ssidChangeCount} cambios de SSID",
-                "0 (Óptimo) | ≥5 (Crítico para VoIP/Gaming)")
+            listOf(
+                "Latencia LAN prom. (Periodo)",
+                lanText,
+                if (data.lanLatencyAvgMs < 0) "Timeout" else if (data.lanLatencyAvgMs < 15f) "Óptimo" else if (data.lanLatencyAvgMs < 50f) "Aceptable" else "Inestable",
+                "Ref: < 15 ms (Óptimo) | > 50 ms (Inestable)"
+            ),
+            listOf(
+                "Picos LAN > 50 ms (Periodo)",
+                "${p.lanSpikeCount} eventos",
+                if (p.lanSpikeCount == 0) "Óptimo" else if (p.lanSpikeCount < 5) "Degradado" else "Crítico",
+                "Ref: 0 (Óptimo) | 1-4 (Degradado) | >= 5 (Crítico)"
+            ),
+            listOf(
+                "Latencia WAN prom. (Periodo)",
+                wanText,
+                if (data.wanLatencyAvgMs < 0) "Timeout" else if (data.wanLatencyAvgMs < 100f) "Óptimo" else if (data.wanLatencyAvgMs < 150f) "Degradado" else if (data.wanLatencyAvgMs < 200f) "Inestable" else "Crítico",
+                "Ref: < 100 ms (Estable) | > 200 ms (Crítico)"
+            ),
+            listOf(
+                "Picos WAN > 200 ms (Periodo)",
+                "${p.latencySpikeCount} eventos",
+                if (p.latencySpikeCount < 2) "Óptimo" else if (p.latencySpikeCount < 5) "Degradado" else if (p.latencySpikeCount < 10) "Inestable" else "Crítico",
+                "Ref: 0-1 (Óptimo) | 2-4 (Degradado) | >= 10 (Crítico)"
+            ),
+            listOf(
+                "Pérdida de Paquetes WAN",
+                String.format(Locale.US, "%.1f%%", p.packetLossPercent),
+                if (p.packetLossPercent < 2f) "Óptimo" else if (p.packetLossPercent < 5f) "Degradado" else if (p.packetLossPercent < 10f) "Inestable" else "Crítico",
+                "Ref: < 2% (Óptimo) | > 10% (Crítico)"
+            ),
+            listOf(
+                "Jitter WAN prom. (Periodo)",
+                String.format(Locale.US, "%.1f ms", p.avgJitterMs),
+                if (p.avgJitterMs < 15f) "Óptimo" else if (p.avgJitterMs < 30f) "Aceptable" else "Inestable",
+                "Ref: < 15 ms (Óptimo) | > 50 ms (Inestable)"
+            ),
+            listOf(
+                "Jitter WAN máx. (Periodo)",
+                String.format(Locale.US, "%.1f ms", p.maxJitterMs),
+                "Informativo",
+                "Variabilidad máxima registrada"
+            ),
+            listOf(
+                "RSSI prom. en el periodo",
+                String.format(Locale.US, "%.1f dBm", p.rssiAvg),
+                if (p.rssiAvg > -127f) rssiToQuality(p.rssiAvg.toInt()) else "Sin Señal",
+                "Señal adecuada durante el periodo"
+            ),
+            listOf(
+                "RSSI mínimo en el periodo",
+                if (p.rssiMin > -127f) "${p.rssiMin.toInt()} dBm" else "Sin Señal",
+                if (p.rssiMin > -127f) rssiToQuality(p.rssiMin.toInt()) else "Sin Señal",
+                "Peor nivel registrado en la sesión"
+            ),
+            listOf(
+                "Varianza de señal RSSI",
+                String.format(Locale.US, "%.1f dBm^2", p.rssiVariance),
+                if (p.rssiVariance < 10f) "Estable" else if (p.rssiVariance < 30f) "Moderada" else "Fluctuante",
+                "Ref: < 10 (Estable) | > 30 (Fluctuante)"
+            ),
+            listOf(
+                "Velocidad Física del Enlace",
+                phyText,
+                "Informativo",
+                "Velocidad negociada AP-Dispositivo"
+            ),
+            listOf(
+                "Banda Wi-Fi Activa",
+                data.wifiBand,
+                "Informativo",
+                "2.4 GHz cob. | 5/6 GHz capacidad"
+            ),
+            listOf(
+                "Eventos de Roaming (Periodo)",
+                "${p.roamingEventsCount} roaming | ${p.ssidChangeCount} cambios",
+                if (p.roamingEventsCount == 0 && p.ssidChangeCount == 0) "Óptimo" else if (p.roamingEventsCount < 3) "Aceptable" else "Frecuente",
+                "Ref: 0 (Óptimo) | >= 5 (Crítico)"
+            )
         )
 
         rows.forEachIndexed { index, row ->
@@ -308,10 +357,22 @@ object PdfGenerator {
             currentY += rowHeight
         }
 
-        currentY += 18f
+        // Footnote aclaratoria de PHY Rate
+        val phyFootnotePaint = TextPaint().apply {
+            color = Color.parseColor("#64748B")
+            textSize = 6.5f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
+            isAntiAlias = true
+        }.disableLigatures()
+        canvas.drawText(
+            sanitizePdfText("[!] La velocidad física (PHY Rate) es negociada entre el dispositivo y el AP; no representa la velocidad real de Internet."),
+            MARGIN, currentY + 10f, phyFootnotePaint
+        )
+
+        currentY += 22f
 
         // 4. Diagnóstico Técnico Detallado
-        canvas.drawText("Diagnóstico Automático Basado en Reglas e IA", MARGIN, currentY, secTitlePaint)
+        canvas.drawText(sanitizePdfText("Diagnóstico Automático Basado en Reglas e IA"), MARGIN, currentY, secTitlePaint)
         currentY += 8f
 
         // Caja de Diagnóstico
@@ -331,8 +392,8 @@ object PdfGenerator {
             textSize = 9.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText("Resultado del Análisis: ${data.diagnosisTitle} (Confianza: ${data.confidence}%)", MARGIN + 12f, currentY + 18f, diagTitlePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText("Resultado del Análisis: ${data.diagnosisTitle} (Confianza: ${data.confidence}%)"), MARGIN + 12f, currentY + 18f, diagTitlePaint)
 
         // Evidencias evaluadas
         var evidenceY = currentY + 30f
@@ -341,14 +402,14 @@ object PdfGenerator {
             textSize = 8.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         
-        canvas.drawText("Evidencias detectadas en la sesión:", MARGIN + 12f, evidenceY, diagTitlePaint)
+        canvas.drawText(sanitizePdfText("Evidencias detectadas en la sesión:"), MARGIN + 12f, evidenceY, diagTitlePaint)
         evidenceY += 10f
         
         data.evidences.take(3).forEach { ev ->
             canvas.drawCircle(MARGIN + 18f, evidenceY - 3f, 2f, Paint().apply { color = Color.parseColor("#0284C7") })
-            canvas.drawText(ev, MARGIN + 26f, evidenceY, evidencePaint)
+            canvas.drawText(sanitizePdfText(ev), MARGIN + 26f, evidenceY, evidencePaint)
             evidenceY += 11f
         }
 
@@ -368,7 +429,7 @@ object PdfGenerator {
             textSize = 8f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         drawTextWrapped(
             canvas = canvas,
             text = data.recommendation,
@@ -382,7 +443,7 @@ object PdfGenerator {
 
         // 5. Observaciones Opcionales del Técnico
         if (!data.technicianNotes.isNullOrBlank()) {
-            canvas.drawText("Observaciones y Anotaciones de Campo", MARGIN, currentY, secTitlePaint)
+            canvas.drawText(sanitizePdfText("Observaciones y Anotaciones de Campo"), MARGIN, currentY, secTitlePaint)
             currentY += 8f
 
             val noteRect = RectF(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY + 58f)
@@ -394,7 +455,7 @@ object PdfGenerator {
                 textSize = 8.5f
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
                 isAntiAlias = true
-            }
+            }.disableLigatures()
             drawTextWrapped(
                 canvas = canvas,
                 text = data.technicianNotes,
@@ -411,12 +472,12 @@ object PdfGenerator {
             textSize = 7.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         canvas.drawText(
-            "Reporte generado por Visor WiFi • El estado refleja el periodo analizado completo, no un instante puntual.",
+            sanitizePdfText("Reporte generado por Visor WiFi - El estado refleja el periodo analizado completo, no un instante puntual."),
             MARGIN, PAGE_HEIGHT - 30f, footerPaint
         )
-        canvas.drawText("Página 1 de 2", PAGE_WIDTH - MARGIN - 50f, PAGE_HEIGHT - 30f, footerPaint)
+        canvas.drawText(sanitizePdfText("Página 1 de 2"), PAGE_WIDTH - MARGIN - 50f, PAGE_HEIGHT - 30f, footerPaint)
     }
 
     /**
@@ -431,8 +492,8 @@ object PdfGenerator {
             textSize = 10f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText("VISOR WIFI — EVIDENCIA GRÁFICA Y EVENTOS DE RED", MARGIN, currentY + 12f, titlePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText("VISOR WIFI - EVIDENCIA GRAFICA Y EVENTOS DE RED"), MARGIN, currentY + 12f, titlePaint)
         
         val linePaint = Paint().apply {
             color = Color.parseColor("#E2E8F0")
@@ -448,11 +509,11 @@ object PdfGenerator {
             textSize = 11f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
-        canvas.drawText("Historial Gráfico de Conexión (Últimos 10 Minutos)", MARGIN, currentY, secTitlePaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText("Historial Gráfico de Conexión (Últimos 10 Minutos)"), MARGIN, currentY, secTitlePaint)
         currentY += 12f
 
-        // Dimensiones físicas de la gráfica a insertar en el PDF (480 x 140 pixeles)
+        // Dimensiones físicas de la gráfica a insertar en el PDF (505 x 145 píxeles)
         val chartWidth = 505
         val chartHeight = 145
 
@@ -461,18 +522,17 @@ object PdfGenerator {
             val latencyBitmap = generateChartBitmap(context, data.latencyHistory, isRssi = false, width = chartWidth, height = chartHeight)
             canvas.drawBitmap(latencyBitmap, MARGIN, currentY, null)
             
-            // Título de la gráfica
             val graphLabelPaint = TextPaint().apply {
                 color = Color.parseColor("#475569")
                 textSize = 7.5f
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
-            }
-            canvas.drawText("Fig A. Historial de Latencias LAN (Acceso Local) y WAN (Acceso a Internet)", MARGIN + 4f, currentY + chartHeight + 10f, graphLabelPaint)
+            }.disableLigatures()
+            canvas.drawText(sanitizePdfText("Fig A. Historial de Latencias LAN (Acceso Local) y WAN (Acceso a Internet)"), MARGIN + 4f, currentY + chartHeight + 10f, graphLabelPaint)
             currentY += chartHeight + 22f
         } catch (e: Exception) {
             val errorPaint = TextPaint().apply { color = Color.RED; textSize = 9f }
-            canvas.drawText("Error al renderizar gráfico de latencia: ${e.message}", MARGIN, currentY + 20f, errorPaint)
+            canvas.drawText(sanitizePdfText("Error al renderizar gráfico de latencia: ${e.message}"), MARGIN, currentY + 20f, errorPaint)
             currentY += 50f
         }
 
@@ -486,17 +546,17 @@ object PdfGenerator {
                 textSize = 7.5f
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
-            }
-            canvas.drawText("Fig B. Historial de Intensidad de Señal Inalámbrica (RSSI en dBm)", MARGIN + 4f, currentY + chartHeight + 10f, graphLabelPaint)
+            }.disableLigatures()
+            canvas.drawText(sanitizePdfText("Fig B. Historial de Intensidad de Señal Inalámbrica (RSSI en dBm)"), MARGIN + 4f, currentY + chartHeight + 10f, graphLabelPaint)
             currentY += chartHeight + 26f
         } catch (e: Exception) {
             val errorPaint = TextPaint().apply { color = Color.RED; textSize = 9f }
-            canvas.drawText("Error al renderizar gráfico de RSSI: ${e.message}", MARGIN, currentY + 20f, errorPaint)
+            canvas.drawText(sanitizePdfText("Error al renderizar gráfico de RSSI: ${e.message}"), MARGIN, currentY + 20f, errorPaint)
             currentY += 50f
         }
 
         // 2. Registro de Eventos de Red (Roaming e Itinerancia)
-        canvas.drawText("Registro de Eventos y Cambios de Red", MARGIN, currentY, secTitlePaint)
+        canvas.drawText(sanitizePdfText("Registro de Eventos y Cambios de Red"), MARGIN, currentY, secTitlePaint)
         currentY += 8f
 
         val eventsBoxRect = RectF(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY + 98f)
@@ -514,15 +574,19 @@ object PdfGenerator {
             textSize = 7.5f
             typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
             isAntiAlias = true
-        }
+        }.disableLigatures()
 
         var eventY = currentY + 14f
         if (data.networkEvents.isEmpty()) {
-            canvas.drawText("No se detectaron eventos significativos de red (roaming o cambio de SSID) durante el monitoreo.", MARGIN + 12f, eventY, TextPaint(eventPaint).apply { typeface = Typeface.DEFAULT })
+            canvas.drawText(
+                sanitizePdfText("No se detectaron eventos significativos de red (roaming o cambio de SSID) durante el monitoreo."),
+                MARGIN + 12f, eventY,
+                TextPaint(eventPaint).apply { typeface = Typeface.DEFAULT }.disableLigatures()
+            )
         } else {
-            // Mostrar últimos 6 eventos para no desbordar la caja
+            // Mostrar últimos 7 eventos para no desbordar la caja
             data.networkEvents.takeLast(7).forEach { event ->
-                canvas.drawText(event, MARGIN + 12f, eventY, eventPaint)
+                canvas.drawText(sanitizePdfText(event), MARGIN + 12f, eventY, eventPaint)
                 eventY += 12f
             }
         }
@@ -538,7 +602,7 @@ object PdfGenerator {
             textSize = 9f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             isAntiAlias = true
-        }
+        }.disableLigatures()
         val sigLinePaint = Paint().apply {
             color = Color.parseColor("#94A3B8")
             strokeWidth = 1f
@@ -548,8 +612,12 @@ object PdfGenerator {
         val leftSigX = MARGIN + 40f
         val sigWidth = 140f
         canvas.drawLine(leftSigX, currentY + 50f, leftSigX + sigWidth, currentY + 50f, sigLinePaint)
-        canvas.drawText("Firma del Técnico", leftSigX + 26f, currentY + 62f, sigTitlePaint)
-        canvas.drawText("Nombre: ${data.technicianName}", leftSigX + 4f, currentY + 74f, TextPaint(sigTitlePaint).apply { typeface = Typeface.DEFAULT; textSize = 8f })
+        canvas.drawText(sanitizePdfText("Firma del Técnico"), leftSigX + 26f, currentY + 62f, sigTitlePaint)
+        canvas.drawText(
+            sanitizePdfText("Nombre: ${data.technicianName}"),
+            leftSigX + 4f, currentY + 74f,
+            TextPaint(sigTitlePaint).apply { typeface = Typeface.DEFAULT; textSize = 8f }.disableLigatures()
+        )
 
         // Dibujar el bitmap de la firma si existe
         data.technicianSignature?.let { signatureBitmap ->
@@ -560,8 +628,12 @@ object PdfGenerator {
         // Firma del Cliente / Sitio (Derecha)
         val rightSigX = PAGE_WIDTH - MARGIN - sigWidth - 40f
         canvas.drawLine(rightSigX, currentY + 50f, rightSigX + sigWidth, currentY + 50f, sigLinePaint)
-        canvas.drawText("Firma del Cliente", rightSigX + 28f, currentY + 62f, sigTitlePaint)
-        canvas.drawText("Sitio: ${data.siteName}", rightSigX + 4f, currentY + 74f, TextPaint(sigTitlePaint).apply { typeface = Typeface.DEFAULT; textSize = 8f })
+        canvas.drawText(sanitizePdfText("Firma del Cliente"), rightSigX + 28f, currentY + 62f, sigTitlePaint)
+        canvas.drawText(
+            sanitizePdfText("Sitio: ${data.siteName}"),
+            rightSigX + 4f, currentY + 74f,
+            TextPaint(sigTitlePaint).apply { typeface = Typeface.DEFAULT; textSize = 8f }.disableLigatures()
+        )
 
         // Pie de Página 2
         val footerPaint = TextPaint().apply {
@@ -569,10 +641,11 @@ object PdfGenerator {
             textSize = 7.5f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
             isAntiAlias = true
-        }
-        canvas.drawText("Visor WiFi - Evidencia de Red Confiable y Segura", MARGIN, PAGE_HEIGHT - 30f, footerPaint)
-        canvas.drawText("Página 2 de 2", PAGE_WIDTH - MARGIN - 50f, PAGE_HEIGHT - 30f, footerPaint)
+        }.disableLigatures()
+        canvas.drawText(sanitizePdfText("Visor WiFi - Evidencia de Red Confiable y Segura"), MARGIN, PAGE_HEIGHT - 30f, footerPaint)
+        canvas.drawText(sanitizePdfText("Página 2 de 2"), PAGE_WIDTH - MARGIN - 50f, PAGE_HEIGHT - 30f, footerPaint)
     }
+
 
     /**
      * Dibuja una celda de tabla en el Canvas del PDF.
@@ -606,22 +679,22 @@ object PdfGenerator {
             val width = colWidths[i]
             canvas.drawRect(currentX, y, currentX + width, y + rowHeight, borderPaint)
             
-            // Centrado vertical básico
-            val text = values[i]
+            // Centrado vertical básico — sanitizar el texto antes de medir/renderizar
+            val rawText = sanitizePdfText(values[i])
             val textBounds = Rect()
-            textPaint.getTextBounds(text, 0, text.length, textBounds)
+            textPaint.getTextBounds(rawText, 0, rawText.length, textBounds)
             val textY = y + (rowHeight + textBounds.height()) / 2f - 1.5f
             val textX = currentX + 6f // Margen interno de celda
             
             // Truncar texto si excede el ancho de columna
-            var safeText = text
+            var safeText = rawText
             val textLimitWidth = width - 12f
-            if (textPaint.measureText(text) > textLimitWidth) {
-                var len = text.length
-                while (len > 0 && textPaint.measureText(text.substring(0, len) + "...") > textLimitWidth) {
+            if (textPaint.measureText(rawText) > textLimitWidth) {
+                var len = rawText.length
+                while (len > 0 && textPaint.measureText(rawText.substring(0, len) + "...") > textLimitWidth) {
                     len--
                 }
-                safeText = if (len > 0) text.substring(0, len) + "..." else ""
+                safeText = if (len > 0) rawText.substring(0, len) + "..." else ""
             }
             
             canvas.drawText(safeText, textX, textY, textPaint)
@@ -631,6 +704,7 @@ object PdfGenerator {
 
     /**
      * Dibuja un texto que se auto-ajusta en múltiples renglones (Word Wrap) usando StaticLayout.
+     * Aplica [sanitizePdfText] internamente para garantizar compatibilidad de caracteres.
      */
     private fun drawTextWrapped(
         canvas: Canvas,
@@ -640,8 +714,9 @@ object PdfGenerator {
         width: Float,
         paint: TextPaint
     ): Float {
+        val safeText = sanitizePdfText(text)
         val staticLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            StaticLayout.Builder.obtain(text, 0, text.length, paint, width.toInt())
+            StaticLayout.Builder.obtain(safeText, 0, safeText.length, paint, width.toInt())
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                 .setLineSpacing(0f, 1.15f)
                 .setIncludePad(false)
@@ -649,7 +724,7 @@ object PdfGenerator {
         } else {
             @Suppress("DEPRECATION")
             StaticLayout(
-                text,
+                safeText,
                 paint,
                 width.toInt(),
                 Layout.Alignment.ALIGN_NORMAL,
@@ -828,5 +903,93 @@ object PdfGenerator {
         chart.draw(canvas)
 
         return bitmap
+    }
+
+    // ─── Helpers de Compatibilidad PDF ───────────────────────────────────────────
+
+    /**
+     * Sanitiza un texto para renderizado seguro en el Canvas de PdfDocument.
+     *
+     * El motor Skia PDF de Android no incluye glifos para todos los caracteres Unicode.
+     * Los más problemáticos son:
+     * - Ligaduras tipográficas latinas (ﬁ, ﬂ, ﬀ) → generan huecos en palabras como "Oficinas"
+     * - En-dash (–) y em-dash (—) → corrompen el texto circundante (ej: "11:50:57 – 11:56:11" → "115057")
+     * - Emojis y símbolos Unicode especiales (⚠️, 🔀, 📡, ≥, ≤, ✓) → glifos vacíos
+     * - Superíndices (²) → no renderizados en fuentes base del PDF
+     *
+     * Esta función transforma únicamente el texto durante el renderizado del PDF.
+     * Los datos originales del modelo [ReportData] permanecen intactos.
+     *
+     * @param text Texto original con posibles caracteres problemáticos.
+     * @return Texto seguro para renderizar en Canvas PDF.
+     */
+    internal fun sanitizePdfText(text: String): String {
+        return text
+            // ─── Ligaduras tipográficas latinas (U+FB00–U+FB06) ───────────────
+            // Estas ligaduras son la causa principal de "Conanza" (Confianza) y "Ocinas" (Oficinas).
+            // El glifo compuesto fi/fl no existe en las fuentes base del PdfDocument de Android.
+            .replace("\uFB00", "ff")   // ﬀ ligadura ff
+            .replace("\uFB01", "fi")   // ﬁ ligadura fi
+            .replace("\uFB02", "fl")   // ﬂ ligadura fl
+            .replace("\uFB03", "ffi")  // ﬃ ligadura ffi
+            .replace("\uFB04", "ffl")  // ﬄ ligadura ffl
+            .replace("\uFB05", "st")   // ﬅ ligadura st
+            .replace("\uFB06", "st")   // ﬆ ligadura st
+            // ─── Guiones tipográficos ─────────────────────────────────────────
+            // El en-dash (–) es la causa principal de "115057" al renderizar rangos horarios.
+            .replace("\u2013", "-")    // – en-dash → guion estándar
+            .replace("\u2014", "-")    // — em-dash → guion estándar
+            .replace("\u2012", "-")    // ‒ figure dash → guion
+            .replace("\u2015", "-")    // ― horizontal bar → guion
+            // ─── Símbolos matemáticos / comparación ──────────────────────────
+            .replace("\u2265", ">=")   // ≥ mayor o igual
+            .replace("\u2264", "<=")   // ≤ menor o igual
+            .replace("\u2248", "~")    // ≈ aproximado
+            .replace("\u00B2", "^2")   // ² superíndice cuadrado
+            .replace("\u00B3", "^3")   // ³ superíndice cúbico
+            // ─── Símbolos de estado → texto equivalente ───────────────────────
+            .replace("✓", "[OK]")
+            .replace("✗", "[X]")
+            .replace("✘", "[X]")
+            // ─── Emojis frecuentes en el sistema de eventos ───────────────────
+            // Los emojis del NetworkMonitorService (📡, 🔀) se procesan aquí para el PDF.
+            .replace("⚠️", "[!]")
+            .replace("⚠", "[!]")
+            .replace("🔀", "[roaming]")
+            .replace("📡", "[AP]")
+            .replace("📶", "[señal]")
+            .replace("🔴", "[rojo]")
+            .replace("🟢", "[verde]")
+            .replace("⚡", "[!]")
+            // ─── Flechas Unicode ──────────────────────────────────────────────
+            .replace("➔", "->")
+            .replace("→", "->")
+            .replace("←", "<-")
+            .replace("↔", "<->")
+            // ─── Comillas tipográficas ─────────────────────────────────────────
+            .replace("\u201C", "\"")   // " comilla doble izquierda
+            .replace("\u201D", "\"")   // " comilla doble derecha
+            .replace("\u2018", "'")    // ' comilla simple izquierda
+            .replace("\u2019", "'")    // ' comilla simple derecha
+            // ─── Separadores y espacios especiales ───────────────────────────
+            .replace("\u00B7", ".")    // · punto medio
+            .replace("\u2022", "-")    // • bullet → guion
+            .replace("\u2026", "...")  // … puntos suspensivos
+            .replace("\u00A0", " ")    // non-breaking space → espacio normal
+    }
+
+    /**
+     * Extensión que desactiva las ligaduras tipográficas en el motor de texto Skia.
+     *
+     * Aunque [sanitizePdfText] elimina ligaduras del texto fuente, el motor Skia puede
+     * reintroducirlas automáticamente durante el renderizado si las ligaduras están
+     * habilitadas en el stack tipográfico. Esta función las desactiva en el nivel de Paint,
+     * garantizando que `fi`, `fl`, `ff` se rendericen como caracteres independientes.
+     *
+     * Referencia: https://developer.android.com/reference/android/graphics/Paint#setFontFeatureSettings(java.lang.String)
+     */
+    private fun TextPaint.disableLigatures(): TextPaint {
+        fontFeatureSettings = "\"liga\" 0, \"clig\" 0, \"dlig\" 0"
+        return this
     }
 }

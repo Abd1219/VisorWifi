@@ -1,22 +1,24 @@
 package com.abdapps.visorwifi.viewmodel
 
 import android.content.Context
-import android.net.wifi.ScanResult
-import android.net.wifi.WifiManager
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.abdapps.visorwifi.NetworkMonitorService
 import com.abdapps.visorwifi.aplocator.SensorOrientationManager
 import com.abdapps.visorwifi.engine.aplocator.RssiDirectionAnalyzer
 import com.abdapps.visorwifi.model.LatencyPoint
+import com.abdapps.visorwifi.model.WifiSnapshot
 import com.abdapps.visorwifi.model.aplocator.ApInfo
 import com.abdapps.visorwifi.model.aplocator.DirectionEstimate
 import com.abdapps.visorwifi.model.aplocator.MeasurementPoint
 import com.abdapps.visorwifi.model.aplocator.RssiOrientationSample
+import com.abdapps.visorwifi.provider.WifiInfoProvider
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -33,6 +35,7 @@ enum class ApLocatorScreenState {
  *
  * Administra:
  * - Selección del BSSID objetivo.
+ * - Obtención independiente de información Wi-Fi ([WifiInfoProvider]).
  * - Adquisición de muestras en tiempo real (RSSI + azimut de sensores).
  * - Cálculo de progreso de rotación (0°–360°).
  * - Detección de cambio de AP o condiciones problemáticas.
@@ -88,6 +91,9 @@ class ApLocatorViewModel : ViewModel() {
     // Referencia al SensorOrientationManager
     private var sensorManager: SensorOrientationManager? = null
 
+    // Job de lectura periódica de Wi-Fi independiente
+    private var wifiPollingJob: Job? = null
+
     /**
      * Inicializa el gestor de sensores de orientación con el contexto provisto.
      */
@@ -124,10 +130,70 @@ class ApLocatorViewModel : ViewModel() {
     }
 
     /**
-     * Actualiza la información del AP actualmente conectado a partir de la telemetría.
+     * Inicia la lectura periódica (1Hz) de información Wi-Fi sin depender de NetworkMonitorService.
      */
-    fun updateConnectedAp(point: LatencyPoint?, service: NetworkMonitorService?, context: Context) {
-        if (point == null) return
+    fun startWifiPolling(context: Context) {
+        stopWifiPolling()
+        wifiPollingJob = viewModelScope.launch {
+            while (isActive) {
+                refreshWifiInfo(context)
+                delay(1000)
+            }
+        }
+    }
+
+    /**
+     * Detiene la lectura periódica de Wi-Fi.
+     */
+    fun stopWifiPolling() {
+        wifiPollingJob?.cancel()
+        wifiPollingJob = null
+    }
+
+    /**
+     * Consulta el snapshot Wi-Fi actual utilizando [WifiInfoProvider] y actualiza el AP seleccionado y los APs disponibles.
+     */
+    fun refreshWifiInfo(context: Context) {
+        val snapshot = WifiInfoProvider.getCurrentWifiSnapshot(context)
+        val available = WifiInfoProvider.getAvailableAps(context)
+
+        _availableAps.value = available
+
+        if (snapshot != null && snapshot.isConnected && !snapshot.bssid.isNullOrBlank()) {
+            val connectedAp = ApInfo(
+                bssid = snapshot.bssid,
+                ssid = snapshot.ssid ?: "Wi-Fi Conectado",
+                rssi = snapshot.rssi,
+                frequencyMHz = snapshot.frequencyMHz,
+                isConnected = true
+            )
+
+            if (_selectedAp.value == null) {
+                _selectedAp.value = connectedAp
+            } else if (_selectedAp.value?.isConnected == true) {
+                _selectedAp.value = _selectedAp.value?.copy(
+                    rssi = snapshot.rssi,
+                    frequencyMHz = snapshot.frequencyMHz
+                )
+            }
+        }
+
+        // Si se encuentra en fase de escaneo, capturar muestra con el snapshot actual
+        if (_screenState.value == ApLocatorScreenState.SCANNING && snapshot != null) {
+            captureRssiSampleFromSnapshot(snapshot)
+        }
+    }
+
+    /**
+     * Actualiza la información del AP actualmente conectado a partir de la telemetría (método de compatibilidad).
+     * Si `point` es nulo, recurre automáticamente a la consulta independiente vía [WifiInfoProvider].
+     */
+    fun updateConnectedAp(point: LatencyPoint? = null, service: NetworkMonitorService? = null, context: Context) {
+        if (point == null) {
+            refreshWifiInfo(context)
+            return
+        }
+
         val bssid = point.bssid ?: return
         if (bssid.isBlank() || bssid == "02:00:00:00:00:00") return
 
@@ -143,56 +209,18 @@ class ApLocatorViewModel : ViewModel() {
             isConnected = true
         )
 
-        // Si aún no se ha seleccionado un AP, seleccionar por defecto el AP conectado
         if (_selectedAp.value == null) {
             _selectedAp.value = connectedAp
         } else if (_selectedAp.value?.isConnected == true) {
-            // Actualizar lecturas de RSSI del AP conectado en tiempo real
             _selectedAp.value = _selectedAp.value?.copy(
                 rssi = rssi,
                 frequencyMHz = frequency
             )
         }
 
-        // Refrescar lista de APs disponibles (AP conectado + escaneados si es posible)
-        refreshAvailableAps(connectedAp, context)
-    }
-
-    /**
-     * Intenta obtener APs visibles adicionales mediante `WifiManager.scanResults`.
-     */
-    private fun refreshAvailableAps(connectedAp: ApInfo, context: Context) {
-        val list = mutableListOf(connectedAp)
-        try {
-            val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            @Suppress("DEPRECATION")
-            val scanResults: List<ScanResult>? = wm?.scanResults
-            if (!scanResults.isNullOrEmpty()) {
-                scanResults.forEach { result ->
-                    if (result.BSSID != null && result.BSSID != connectedAp.bssid) {
-                        val ssidName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            result.wifiSsid?.toString()?.removeSurrounding("\"") ?: result.SSID
-                        } else {
-                            result.SSID
-                        }
-                        if (!ssidName.isNullOrBlank()) {
-                            list.add(
-                                ApInfo(
-                                    bssid = result.BSSID,
-                                    ssid = ssidName,
-                                    rssi = result.level,
-                                    frequencyMHz = result.frequency,
-                                    isConnected = false
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        } catch (ignored: Exception) {
-            // No hacer nada si falla el escaneo (fallback a solo el AP conectado)
-        }
-        _availableAps.value = list.distinctBy { it.bssid }
+        // Refrescar lista de APs disponibles
+        val available = WifiInfoProvider.getAvailableAps(context)
+        _availableAps.value = if (available.isNotEmpty()) available else listOf(connectedAp)
     }
 
     /**
@@ -226,18 +254,53 @@ class ApLocatorViewModel : ViewModel() {
     }
 
     /**
+     * Registra una nueva muestra de telemetría RSSI proveniente de un snapshot independiente.
+     */
+    private fun captureRssiSampleFromSnapshot(snapshot: WifiSnapshot) {
+        val targetAp = _selectedAp.value ?: return
+        val currentBssid = snapshot.bssid
+
+        // Detección de cambio de BSSID durante el escaneo
+        if (currentBssid != null && currentBssid != "02:00:00:00:00:00" && currentBssid != targetAp.bssid) {
+            _directionEstimate.value = DirectionEstimate(
+                azimuthDeg = 0.0,
+                confidencePercent = 0,
+                message = "La conexión cambió de AP. Reinicia la medición.",
+                bestRssi = -127,
+                avgRssi = -127f,
+                warningCode = DirectionEstimate.WarningCode.BSSID_CHANGED
+            )
+            _screenState.value = ApLocatorScreenState.RESULT
+            return
+        }
+
+        val rssi = snapshot.rssi
+        if (rssi <= -127) return
+
+        val azimuth = _currentAzimuth.value.toDouble()
+
+        val sample = RssiOrientationSample(
+            azimuthDeg = azimuth,
+            rssi = rssi,
+            timestamp = System.currentTimeMillis(),
+            bssid = targetAp.bssid,
+            frequencyMHz = if (snapshot.frequencyMHz > 0) snapshot.frequencyMHz else targetAp.frequencyMHz
+        )
+
+        samples.add(sample)
+        updateRotationCoverage(azimuth)
+    }
+
+    /**
      * Registra una nueva muestra de telemetría RSSI con el azimut actual.
-     * Es invocado periódicamente con cada actualización de latencia/RSSI del servicio.
      */
     fun onNewRssiSample(point: LatencyPoint?) {
         if (_screenState.value != ApLocatorScreenState.SCANNING) return
         val targetAp = _selectedAp.value ?: return
         if (point == null) return
 
-        // Detección de cambio de BSSID durante el escaneo
         val currentBssid = point.bssid
         if (currentBssid != null && currentBssid != "02:00:00:00:00:00" && currentBssid != targetAp.bssid) {
-            // Invalidate scan
             _directionEstimate.value = DirectionEstimate(
                 azimuthDeg = 0.0,
                 confidencePercent = 0,
@@ -287,8 +350,6 @@ class ApLocatorViewModel : ViewModel() {
 
         val progress = ((visitedBins.size / 36.0) * 100.0).toInt().coerceIn(0, 100)
         _rotationProgress.value = progress
-
-        // Si se han alcanzado 360° (36 bins) o suficientes muestras, puede finalizar automáticamente o por botón
     }
 
     /**
@@ -305,7 +366,6 @@ class ApLocatorViewModel : ViewModel() {
         _directionEstimate.value = estimate
         _screenState.value = ApLocatorScreenState.RESULT
 
-        // Si la estimación fue válida, agregar automáticamente al historial de puntos de la sesión
         if (estimate.isValid && samples.isNotEmpty()) {
             val bestRssi = samples.maxOf { it.rssi }
             val latestRssi = samples.last().rssi

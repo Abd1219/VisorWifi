@@ -208,7 +208,7 @@ fun LatencyMonitorScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ── Cabecera Premium Neo-Brutalista ────────────────────────────────
+        // ── Cabecera e Información de Acción ──────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -216,60 +216,41 @@ fun LatencyMonitorScreen(
         ) {
             Column {
                 Text(
-                    text = "VISOR WIFI",
-                    fontSize = 24.sp,
+                    text = "MONITOR DE RED",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF00F0FF),
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp
+                    letterSpacing = 1.5.sp
                 )
                 Text(
-                    text = "Monitor de Red en Tiempo Real",
-                    fontSize = 14.sp,
+                    text = "Latencias LAN/WAN y Telemetría",
+                    fontSize = 12.sp,
                     color = Color(0xFF8E9AA8)
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onOpenApLocator,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF00F0FF),
-                        contentColor = Color.Black
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "📡 AP LOCATOR",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        if (historyList.size < 10) {
-                            Toast.makeText(context, "Se necesitan al menos 10 muestras para generar un reporte.", Toast.LENGTH_LONG).show()
-                        } else {
-                            showInputDialog = true
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF0D9488),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "REPORTE",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        letterSpacing = 0.5.sp
-                    )
-                }
+            Button(
+                onClick = {
+                    if (historyList.size < 10) {
+                        Toast.makeText(context, "Se necesitan al menos 10 muestras para generar un reporte.", Toast.LENGTH_LONG).show()
+                    } else {
+                        showInputDialog = true
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF0D9488),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "REPORTE",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    letterSpacing = 0.5.sp
+                )
             }
         }
 

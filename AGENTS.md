@@ -46,7 +46,8 @@ com.abdapps.visorwifi
 │   ├── NetworkMetrics.kt          # Métricas consolidadas para diagnóstico
 │   ├── DiagnosisState.kt          # Estado de diagnóstico para UI
 │   ├── ReportData.kt              # Datos estructurados para generación de PDF
-│   ├── PdfGenerator.kt            # Generador nativo de archivos PDF
+│   ├── PdfGenerator.kt            # Generador nativo de archivos PDF con sanitización de glifos
+│   ├── WifiSnapshot.kt            # Captura desacoplada e instantánea del enlace Wi-Fi
 │   └── aplocator/                 # Modelos del módulo AP Locator
 │       ├── RssiOrientationSample.kt# Muestra atómica (azimut, RSSI, timestamp, BSSID, freq)
 │       ├── DirectionEstimate.kt   # Estimación de dirección (azimut, confianza, warnings)
@@ -54,11 +55,15 @@ com.abdapps.visorwifi
 │       ├── ApLocatorSession.kt    # Sesión en memoria con promedio circular
 │       └── ApInfo.kt              # Información técnica del AP y lookup OUI de fabricantes
 │
+├── provider/                      # Proveedores desacoplados de información de sistema
+│   └── WifiInfoProvider.kt        # Consulta directa de WifiInfo y escaneo sin Foreground Service
+│
 ├── ui/                            # Capa de presentación (Jetpack Compose)
 │   ├── screens/
 │   │   ├── LatencyMonitorScreen.kt# Pantalla principal de monitoreo en tiempo real
 │   │   └── ApLocatorScreen.kt     # Pantalla declarativa de AP Locator (SELECT_AP, SCANNING, RESULT)
 │   ├── components/
+│   │   ├── ModeSwitcher.kt        # Selector superior Neo-Brutalista de pantallas (Monitor / AP Locator)
 │   │   ├── WifiInfoCard.kt        # Tarjeta de detalles del enlace Wi-Fi
 │   │   ├── DiagnosisCard.kt       # Tarjeta de diagnóstico de red
 │   │   ├── LatencyCard.kt         # Tarjeta de métrica instantánea LAN/WAN
@@ -78,7 +83,7 @@ com.abdapps.visorwifi
 │
 └── viewmodel/
     ├── NetworkDiagnosisViewModel.kt# ViewModel del diagnóstico de red
-    └── ApLocatorViewModel.kt       # ViewModel del módulo AP Locator
+    └── ApLocatorViewModel.kt       # ViewModel del módulo AP Locator (con polling independiente)
 ```
 
 ---

@@ -1,6 +1,10 @@
 package com.abdapps.visorwifi.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +31,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.abdapps.visorwifi.NetworkMonitorService
 import com.abdapps.visorwifi.model.LatencyPoint
@@ -60,16 +68,16 @@ import java.util.Locale
  * 3. **RESULT**: Brújula con la dirección estimada, indicador de señal y porcentaje de confianza.
  *
  * @param modifier     Modificador Compose.
- * @param service      Instancia activa del servicio de monitoreo.
- * @param latestPoint  Último punto telemétrico instantáneo emitido por el servicio.
+ * @param service      Instancia activa del servicio de monitoreo (opcional).
+ * @param latestPoint  Último punto telemétrico instantáneo emitido por el servicio (opcional).
  * @param onNavigateBack Callback para regresar a la pantalla principal de monitoreo.
  */
 @Composable
 fun ApLocatorScreen(
     modifier: Modifier = Modifier,
-    service: NetworkMonitorService?,
-    latestPoint: LatencyPoint?,
-    onNavigateBack: () -> Unit
+    service: NetworkMonitorService? = null,
+    latestPoint: LatencyPoint? = null,
+    onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val locatorViewModel: ApLocatorViewModel = viewModel()
@@ -85,23 +93,43 @@ fun ApLocatorScreen(
     val isSensorAvailable by locatorViewModel.isSensorAvailable.collectAsState()
     val sensorErrorMessage by locatorViewModel.sensorErrorMessage.collectAsState()
 
-    // Inicializar sensores y escuchar ciclo de vida de la pantalla
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasLocationPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        if (hasLocationPermission) {
+            locatorViewModel.refreshWifiInfo(context)
+        }
+    }
+
+    // Inicializar sensores y bucle de polling de Wi-Fi independiente
     LaunchedEffect(Unit) {
         locatorViewModel.initSensors(context)
         locatorViewModel.startListeningSensors()
+        locatorViewModel.startWifiPolling(context)
     }
 
     DisposableEffect(Unit) {
         onDispose {
             locatorViewModel.stopListeningSensors()
+            locatorViewModel.stopWifiPolling()
         }
     }
 
-    // Actualizar AP conectado con cada nueva lectura de telemetría del servicio
+    // Fallback: Actualizar AP si llega un punto del servicio de monitoreo (si está activo)
     LaunchedEffect(latestPoint) {
-        locatorViewModel.updateConnectedAp(latestPoint, service, context)
-        if (screenState == ApLocatorScreenState.SCANNING) {
-            locatorViewModel.onNewRssiSample(latestPoint)
+        if (latestPoint != null) {
+            locatorViewModel.updateConnectedAp(latestPoint, service, context)
+            if (screenState == ApLocatorScreenState.SCANNING) {
+                locatorViewModel.onNewRssiSample(latestPoint)
+            }
         }
     }
 
@@ -159,6 +187,53 @@ fun ApLocatorScreen(
                     modifier = Modifier.padding(12.dp),
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+
+        // ── Banner de Advertencia si falta el Permiso de Ubicación ──────────
+        if (!hasLocationPermission) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2D1F00))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "📍 Permiso de Ubicación Requerido",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFB703)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Se requiere acceso a la ubicación para identificar el BSSID/SSID real de la red Wi-Fi.",
+                            fontSize = 11.sp,
+                            color = Color(0xFFE0E0E0)
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFB703),
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("CONCEDER", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 

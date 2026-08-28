@@ -10,7 +10,7 @@ VisorWifi sigue los principios de **Clean Architecture** adaptados a aplicacione
 
 ```
 [ Capa de Presentación (UI) ]
-  Jetpack Compose + StateFlow
+  Jetpack Compose + StateFlow + ModeSwitcher
         │
         ▼
 [ Capa de ViewModel ]
@@ -18,17 +18,19 @@ VisorWifi sigue los principios de **Clean Architecture** adaptados a aplicacione
         │
         ▼
 [ Capa de Dominio y Motores ]
-  NetworkDiagnosisEngine / HybridDiagnosisEngine / RssiDirectionAnalyzer / ConfidenceCalculator
+  NetworkDiagnosisEngine / HybridDiagnosisEngine / RssiDirectionAnalyzer / ConfidenceCalculator / PdfGenerator
         │
         ▼
-[ Capa de Servicios y Datos ]
-  NetworkMonitorService / SensorOrientationManager / WifiManager
+[ Capa de Servicios y Proveedores de Datos ]
+  NetworkMonitorService (1Hz Flow)  │  WifiInfoProvider (Consulta Desacoplada)
+  SensorOrientationManager (Sensores)│  WifiManager & ConnectivityManager
 ```
 
 ---
 
 ## 2. Flujo de Datos Telemétricos en Tiempo Real
 
+### 2.1 Flujo por Servicio en Primer Plano (Foreground Service)
 ```mermaid
 sequenceDiagram
     participant OS as Sistema Android (Ping/TCP/WiFi)
@@ -47,6 +49,12 @@ sequenceDiagram
         VM->>UI: Recomposición reactiva por StateFlow
     end
 ```
+
+### 2.2 Flujo Desacoplado para AP Locator (`WifiInfoProvider`)
+Cuando el usuario entra directamente a la pantalla de **AP Locator** sin tener iniciado el servicio de monitoreo en segundo plano, `ApLocatorViewModel` ejecuta un polling directo e independiente mediante `WifiInfoProvider`:
+- Consulta `WifiSnapshot` instantáneo cada 1 segundo en una corrutina aislada con `viewModelScope`.
+- Obtiene escaneo de puntos de acceso visibles (`getAvailableAps`) sin acoplarse al servicio de latencias.
+- Registra muestras atómicas `RssiOrientationSample` durante la calibración 360°.
 
 ---
 
@@ -95,6 +103,7 @@ Factor | Peso (%) | Fórmula / Umbrales
 ┌────────────────────────┐                     ┌────────────────────────┐
 │ NetworkDiagnosisEngine │                     │ LightWeightClassifier  │
 │   (Fase 1 Heurística)  │                     │   (Fase 2 IA Local)    │
+│   (Reglas rígidas ms)  │                     │   (Puntuación ventana) │
 └───────────┬────────────┘                     └───────────┬────────────┘
             │                                               │
             └───────────────────────┬───────────────────────┘
@@ -109,12 +118,30 @@ Factor | Peso (%) | Fórmula / Umbrales
 
 ---
 
-## 5. Estrategia de Pruebas Unitarias
+## 5. Motor de Generación de Reportes PDF (`PdfGenerator`)
+
+El módulo `PdfGenerator` renderiza reportes ejecutivos vectoriales de 2 páginas con gráficos embebidos, tablas de métricas y diagnóstico pericial:
+
+- **Sanitización de Glifos y Ligaduras (`sanitizePdfText`)**: El motor Skia PDF de Android carece de glifos para ciertas ligaduras latinas (`fi`, `fl`, `ff`), en-dashes (`–`), superíndices y emojis, lo cual provocaba corrupción tipográfica ("Conanza", "Ocinas", concatenación de timestamps). La sanitización convierte caracteres especiales a representaciones ASCII/Unicode compatibles antes del trazado.
+- **Desactivación de Ligaduras en Paint (`disableLigatures`)**: Configura `fontFeatureSettings = "\"liga\" 0, \"clig\" 0, \"dlig\" 0"` en `TextPaint` para prevenir la fusión automática de caracteres en el renderizado.
+- **Generación Vectorial y Rasterizado Dinámico**: Los gráficos de latencia y RSSI se convierten en bitmaps de alta resolución para incrustarse nítidamente en el documento PDF de 72 DPI estándar A4.
+
+---
+
+## 6. Estrategia de Pruebas Unitarias
 
 Todas las pruebas unitarias se encuentran en `app/src/test/java/`.
 
+### Suites de Pruebas Principales:
+1. **`RssiDirectionAnalyzerTest`**: Verificación de filtros de mediana, medias móviles, binned angular y cálculo de centroide circular.
+2. **`ConfidenceCalculatorTest`**: Evaluación de los 5 factores ponderados bajo distintos escenarios de señal y movimiento.
+3. **`ApLocatorIndependenceTest`**: Validación de aislamiento e interoperabilidad del AP Locator operando con y sin `NetworkMonitorService`.
+4. **`PdfSanitizerTest`**: Pruebas exhaustivas de sanitización tipográfica (ligaduras latinas, guiones en-dash/em-dash, emojis y símbolos matemáticos).
+5. **`PeriodAnalyzerTest` & `PeriodStatusEvaluatorTest`**: Cálculo de percentiles, jitter y estados de periodos para reportes.
+6. **`HybridDiagnosisEngineTest` & `LightWeightClassifierTest`**: Clasificación determinista de anomalías y resolución de discrepancias heurísticas.
+
 ### Regla Fundamental:
-Los algoritmos (`RssiDirectionAnalyzer`, `ConfidenceCalculator`, `PeriodAnalyzer`, `LightWeightClassifier`) deben ser **funciones puras** independientes del framework de Android. Esto permite ejecutar la suite completa de pruebas unitarias en **< 30 segundos** sin requerir Robolectric ni emulador.
+Los algoritmos (`RssiDirectionAnalyzer`, `ConfidenceCalculator`, `PeriodAnalyzer`, `LightWeightClassifier`, `PdfGenerator.sanitizePdfText`) deben ser **funciones puras** independientes del framework de Android. Esto permite ejecutar la suite completa de pruebas unitarias en **< 30 segundos** sin requerir Robolectric ni emulador.
 
 ### Comando para Ejecución de Pruebas:
 ```powershell

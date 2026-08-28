@@ -12,11 +12,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.abdapps.visorwifi.ui.theme.VisorWifiTheme
 
@@ -108,24 +111,61 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color(0xFF0B0E14)
                 ) { innerPadding ->
-                    when (currentScreen.value) {
-                        AppScreen.MONITOR -> {
-                            LatencyMonitorScreen(
-                                modifier = Modifier.padding(innerPadding),
-                                service = serviceInstance.value,
-                                isServiceRunning = isServiceRunningState.value,
-                                onStartService = { startMonitorService() },
-                                onStopService = { stopMonitorService() },
-                                onOpenApLocator = { currentScreen.value = AppScreen.AP_LOCATOR }
+                    androidx.compose.foundation.layout.Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        // ── Encabezado Principal y Selector de Modos ──────────────────
+                        androidx.compose.foundation.layout.Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            androidx.compose.material3.Text(
+                                text = "VISOR WIFI",
+                                fontSize = 24.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+                                color = Color(0xFF00F0FF),
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                letterSpacing = 2.sp
+                            )
+                            androidx.compose.material3.Text(
+                                text = "Diagnóstico y Análisis de Redes Wi-Fi",
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E9AA8)
+                            )
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 10.dp))
+
+                            // Selector de Modos Neo-Brutalista
+                            com.abdapps.visorwifi.ui.components.ModeSwitcher(
+                                currentScreen = currentScreen.value,
+                                onScreenSelected = { screen -> currentScreen.value = screen }
                             )
                         }
-                        AppScreen.AP_LOCATOR -> {
-                            com.abdapps.visorwifi.ui.screens.ApLocatorScreen(
-                                modifier = Modifier.padding(innerPadding),
-                                service = serviceInstance.value,
-                                latestPoint = serviceInstance.value?.getHistoryCopy()?.lastOrNull(),
-                                onNavigateBack = { currentScreen.value = AppScreen.MONITOR }
-                            )
+
+                        // ── Contenido de la Pantalla Activa ───────────────────────────
+                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
+                            when (currentScreen.value) {
+                                AppScreen.MONITOR -> {
+                                    LatencyMonitorScreen(
+                                        modifier = Modifier.fillMaxSize(),
+                                        service = serviceInstance.value,
+                                        isServiceRunning = isServiceRunningState.value,
+                                        onStartService = { startMonitorService() },
+                                        onStopService = { stopMonitorService() },
+                                        onOpenApLocator = { currentScreen.value = AppScreen.AP_LOCATOR }
+                                    )
+                                }
+                                AppScreen.AP_LOCATOR -> {
+                                    com.abdapps.visorwifi.ui.screens.ApLocatorScreen(
+                                        modifier = Modifier.fillMaxSize(),
+                                        service = serviceInstance.value,
+                                        latestPoint = serviceInstance.value?.getHistoryCopy()?.lastOrNull(),
+                                        onNavigateBack = { currentScreen.value = AppScreen.MONITOR }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
