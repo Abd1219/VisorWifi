@@ -1,17 +1,13 @@
 package com.abdapps.visorwifi.engine.ia
 
-import android.util.Log
-
 /**
- * Clasificador ligero y determinista por scoring (ponderación heurística).
+ * Prototipo de clasificador determinista por puntuación heurística.
  *
  * Analiza un conjunto estructurado de características estadísticas ([NetworkFeatures])
  * y produce una predicción categórica ([IaDiagnosisClass]) con un nivel de confianza y
  * los factores o características más influyentes.
  */
 object LightWeightClassifier {
-
-    private const val TAG = "LightWeightClassifier"
 
     /**
      * Evalúa las características y realiza la clasificación en base a reglas de scoring ponderadas.
@@ -178,8 +174,6 @@ object LightWeightClassifier {
 
         // --- 9. Identificación de Características Top (Atribución) ---
         val topFeatures = identifyTopFeatures(predictedClass, features)
-
-        Log.d(TAG, "Inferencia IA - Clase: $predictedClass, Score: $maxScore, Confianza: $confidenceScore%, Top Features: $topFeatures")
 
         return IaDiagnosisResult(predictedClass, confidenceScore, topFeatures)
     }

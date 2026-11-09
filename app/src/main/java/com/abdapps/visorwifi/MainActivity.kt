@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             androidx.compose.material3.Text(
                                 text = "VISOR WIFI",
-                                fontSize = 24.sp,
+                                fontSize = 22.sp,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
                                 color = Color(0xFF00F0FF),
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -132,10 +132,10 @@ class MainActivity : ComponentActivity() {
                             )
                             androidx.compose.material3.Text(
                                 text = "Diagnóstico y Análisis de Redes Wi-Fi",
-                                fontSize = 12.sp,
-                                color = Color(0xFF8E9AA8)
+                                fontSize = 11.sp,
+                                color = Color(0xFF6F7B8B)
                             )
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 10.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
 
                             // Selector de Modos Neo-Brutalista
                             com.abdapps.visorwifi.ui.components.ModeSwitcher(

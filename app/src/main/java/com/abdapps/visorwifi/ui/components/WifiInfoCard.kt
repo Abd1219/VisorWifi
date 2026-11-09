@@ -83,34 +83,23 @@ fun WifiInfoCard(latestPoint: LatencyPoint?, service: NetworkMonitorService?) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Red (SSID) y MAC del AP de destino (BSSID)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(modifier = Modifier.weight(1f)) {
-                    WifiInfoRow(icon = "📶", label = "RED (SSID)", value = ssidText, valueColor = Color(0xFF00F0FF))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    WifiInfoRow(icon = "🔗", label = "AP (BSSID)", value = bssidText, valueColor = Color(0xFF8E9AA8))
-                }
-            }
+            // La red y la señal son la información más útil al primer vistazo.
+            Text(text = "RED Wi-Fi (SSID)", fontSize = 9.sp, color = Color(0xFF536371), fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = ssidText,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF00F0FF),
+                fontFamily = FontFamily.Monospace
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = Color(0xFF1C2331))
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Fila de parámetros físicos: Banda, Calidad y Velocidad del Enlace físico
+            // Fila de parámetros físicos, con señal antes de detalles secundarios.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Frecuencia física
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "BANDA", fontSize = 9.sp, color = Color(0xFF536371), fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = band.ifEmpty { "--" },
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFF00F0FF),
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                
                 // Nivel cualitativo y cuantitativo del RSSI
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = "SEÑAL", fontSize = 9.sp, color = Color(0xFF536371), fontWeight = FontWeight.Bold)
@@ -123,6 +112,19 @@ fun WifiInfoCard(latestPoint: LatencyPoint?, service: NetworkMonitorService?) {
                         fontFamily = FontFamily.Monospace
                     )
                     Text(text = rssiQuality, fontSize = 10.sp, color = rssiColor.copy(alpha = 0.7f))
+                }
+                
+                // Frecuencia física
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "BANDA", fontSize = 9.sp, color = Color(0xFF536371), fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = band.ifEmpty { "--" },
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF00F0FF),
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
                 
                 // Velocidad PHY de subida y bajada en tiempo real
@@ -139,6 +141,12 @@ fun WifiInfoCard(latestPoint: LatencyPoint?, service: NetworkMonitorService?) {
                     }
                 }
             }
+
+            // Dato técnico secundario: permanece disponible sin competir con la red.
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(color = Color(0xFF1C2331))
+            Spacer(modifier = Modifier.height(8.dp))
+            WifiInfoRow(icon = "🔗", label = "PUNTO DE ACCESO (BSSID)", value = bssidText, valueColor = Color(0xFF8E9AA8))
         }
     }
 }

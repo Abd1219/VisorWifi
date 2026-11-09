@@ -35,11 +35,11 @@ com.abdapps.visorwifi
 │   ├── aplocator/
 │   │   ├── ConfidenceCalculator.kt# Ponderador de 5 factores de confianza (0-100%)
 │   │   └── RssiDirectionAnalyzer.kt # Algoritmo determinista RSSI + orientación (función pura)
-│   └── ia/                        # Motor de diagnóstico por IA local
+│   └── ia/                        # Prototipo heurístico inactivo; no es IA real
 │       ├── NetworkFeatures.kt     # Extracción de características telemétricas
 │       ├── LightWeightClassifier.kt# Clasificador local determinista por puntuación
-│       ├── IaDiagnosisResult.kt   # Resultado inferido por IA
-│       └── HybridDiagnosisEngine.kt# Fusión híbrida de heurística + IA
+│       ├── IaDiagnosisResult.kt   # Resultado del clasificador heurístico experimental
+│       └── HybridDiagnosisEngine.kt# Prototipo de combinación no conectado al monitor
 │
 ├── model/                         # Modelos de datos inmutables
 │   ├── LatencyPoint.kt            # Telemetría instantánea por segundo
@@ -91,22 +91,29 @@ com.abdapps.visorwifi
 ## ⚙️ Reglas Arquitectónicas y Convenciones de Desarrollo
 
 ### 1. Inmutabilidad y Funciones Puras en Motores
-- Todos los motores de análisis (`RssiDirectionAnalyzer`, `ConfidenceCalculator`, `PeriodAnalyzer`, `NetworkDiagnosisEngine`, `LightWeightClassifier`) **MUST BE** objetos puros sin dependencias de Android SDK (`Context`, `View`, `SensorManager`).
-- Esto permite ejecutar pruebas unitarias con JUnit 4 rápido sin emulador.
+- Los motores de análisis deben evitar dependencias del Android SDK (`Context`, `View`, `SensorManager`, `Log`) para ser testeables como lógica JVM.
+- El clasificador experimental y el combinador no deben añadir dependencias del Android SDK; actualmente no usan `android.util.Log`.
 
-### 2. No Romper APIs Deprecadas de Compatibilidad
+### 2. Estado del diagnóstico e IA
+- El diagnóstico actual es heurístico y determinista. `LightWeightClassifier` aplica reglas de puntuación; pese al nombre del paquete `engine/ia`, no es un modelo de IA ni aprendizaje automático.
+- El monitor y los reportes usan `NetworkDiagnosisEngine`. El código bajo `engine/ia` contiene un prototipo heurístico, pero no está conectado al flujo actual.
+- La implementación de IA real es trabajo futuro. Actualizar la documentación si cambia este estado.
+- `LatencyPoint.lanLatency` y `wanLatency` representan ICMP. Los tiempos y destinos TCP complementarios van en campos separados y no se deben mezclar con promedios, jitter o pérdida ICMP.
+
+### 3. No Romper APIs Deprecadas de Compatibilidad
 - `WifiManager.connectionInfo` y `ScanResult.SSID` están anotados con `@Suppress("DEPRECATION")` intencionalmente para mantener compatibilidad desde `minSdk 26`. NO refactorizar ni eliminar estas llamadas a menos que sea explícitamente solicitado.
 
-### 3. Concurrencia y Reactividad
+### 4. Concurrencia y Reactividad
 - Usar `SharedFlow` / `StateFlow` para emitir datos telemétricos desde `NetworkMonitorService`.
 - Evitar operaciones de E/S o pings en el hilo principal (`Dispatchers.IO`).
 - Usar `SupervisorJob` en corrutinas de servicio para resiliencia ante fallas puntuales de red.
 
-### 4. Honestidad Técnica en AP Locator
+### 5. Honestidad Técnica en AP Locator
 - **NUNCA** afirmar que la funcionalidad es un sistema de *Direction of Arrival (DoA)* ni que conoce el *ángulo físico real*.
 - Usar siempre términos: *Dirección estimada*, *Zona probable*, *Confianza de estimación*.
+- La implementación actual detiene la captura cuando el BSSID seleccionado difiere del BSSID conectado; no afirmar que estima APs cercanos no conectados.
 
-### 5. Estilo Visual y Tema
+### 6. Estilo Visual y Tema
 - Preservar el tema **Dark Mode Neo-Brutalista**:
   - Fondo de pantalla: `Color(0xFF0B0E14)`
   - Contenedores / Tarjetas: `Color(0xFF121620)` / `Color(0xFF161C26)`

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
  * @param sublabel Descripción secundaria o aclaratoria de la tarjeta (ej. "Acceso Local").
  * @param accentColor Color característico de acento para el indicador y el borde degradado.
  * @param value Valor actual de la latencia formateado en milisegundos (ej. "4.5 ms" o "Timeout").
+ * @param statusText Interpretación visual derivada de la medición actual, sin alterar la telemetría.
+ * @param supplementalValue Medición TCP complementaria, separada de la latencia ICMP.
  * @param packetLoss Porcentaje opcional de pérdida de paquetes para desplegar un badge de advertencia.
  */
 @Composable
@@ -45,7 +47,9 @@ fun LatencyCard(
     sublabel: String,
     accentColor: Color,
     value: String,
-    packetLoss: Float? = null
+    packetLoss: Float? = null,
+    statusText: String,
+    supplementalValue: String? = null
 ) {
     Card(
         modifier = modifier.border(
@@ -80,7 +84,7 @@ fun LatencyCard(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = String.format(java.util.Locale.US, "Pérdida: %.0f%%", packetLoss),
+                            text = String.format(java.util.Locale.US, "Pérdida ICMP: %.0f%%", packetLoss),
                             color = badgeColor,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold
@@ -110,6 +114,22 @@ fun LatencyCard(
                 color = Color.White,
                 fontFamily = FontFamily.Monospace
             )
+            Text(
+                text = statusText.uppercase(),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = accentColor,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            if (supplementalValue != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = supplementalValue,
+                    fontSize = 10.sp,
+                    color = Color(0xFF8E9AA8)
+                )
+            }
         }
     }
 }

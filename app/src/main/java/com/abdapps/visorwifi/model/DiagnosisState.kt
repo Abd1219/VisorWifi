@@ -13,10 +13,8 @@ enum class DiagnosisStatus {
 /**
  * Representa el estado del diagnóstico de red en un momento dado.
  *
- * Esta data class define el contrato de datos entre la capa de lógica (ViewModel / motor de IA)
- * y el componente visual [DiagnosisCard]. El diseño es intencionalmente agnóstico respecto a
- * cómo se genera el diagnóstico: puede provenir de reglas heurísticas simples, un modelo de ML
- * local o una API remota, sin modificar la UI.
+ * Esta data class define el contrato de datos entre la lógica de diagnóstico y el componente
+ * visual [DiagnosisCard]. La UI no depende del algoritmo que construye este estado.
  *
  * @property status         Enum indicando el estado cualitativo (HEALTHY, WARNING, PROBLEM, LOADING).
  * @property title          Título del diagnóstico (ej. "Interferencia Wi-Fi probable").

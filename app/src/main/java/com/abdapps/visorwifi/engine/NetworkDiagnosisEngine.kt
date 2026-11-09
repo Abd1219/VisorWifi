@@ -22,7 +22,24 @@ object NetworkDiagnosisEngine {
      * @param metrics Métricas consolidadas de red (LAN, WAN, Jitter, RSSI, pérdida de paquetes).
      * @return El estado de diagnóstico [DiagnosisState] correspondiente.
      */
-    fun evaluateDiagnosis(metrics: NetworkMetrics): DiagnosisState {
+    fun evaluateDiagnosis(
+        metrics: NetworkMetrics,
+        lanValidSamples: Int = 1,
+        wanValidSamples: Int = 1
+    ): DiagnosisState {
+        if (lanValidSamples == 0 || wanValidSamples == 0) {
+            return DiagnosisState(
+                status = DiagnosisStatus.WARNING,
+                title = "Mediciones ICMP insuficientes",
+                confidence = 0,
+                evidences = listOf(
+                    "Respuestas ICMP locales: $lanValidSamples",
+                    "Respuestas ICMP externas: $wanValidSamples"
+                ),
+                recommendation = "El sondeo TCP comprueba conexión, pero no sustituye las mediciones ICMP del diagnóstico."
+            )
+        }
+
         // Reglas de negocio y umbrales heurísticos
         val isLanStable = metrics.lanLatencyAvgMs < 15f && metrics.lanLatencyMaxMs < 50f
         val hasWanSpikes = metrics.wanLatencyMaxMs > 200f || metrics.wanLatencyAvgMs > 120f || (metrics.packetLossPercent ?: 0f) > 5f

@@ -67,7 +67,7 @@ object PeriodAnalyzer {
         val maxLanLatencyMs  = lanValid.maxOrElse(0f)
         val lanSpikeCount    = lanValid.count { it > LAN_SPIKE_THRESHOLD_MS }
 
-        // ─── Latencia WAN ────────────────────────────────────────────────────
+        // ─── Latencia WAN ICMP ───────────────────────────────────────────────
         val wanValid = history.map { it.wanLatency }.filter { it >= 0f }
         val avgWanLatencyMs   = wanValid.averageOrZero()
         val maxWanLatencyMs   = wanValid.maxOrElse(0f)
@@ -75,9 +75,10 @@ object PeriodAnalyzer {
         val latencySpikeCount = wanValid.count { it > WAN_SPIKE_THRESHOLD_MS }
 
         val wanTimeouts       = history.count { it.wanLatency < 0f }
+        // lanLatency/wanLatency contienen ICMP exclusivamente; los fallbacks TCP están separados.
         val packetLossPercent = (wanTimeouts.toFloat() / sampleCount) * 100f
 
-        // ─── Jitter WAN ──────────────────────────────────────────────────────
+        // ─── Jitter WAN ICMP ────────────────────────────────────────────────
         val jitterValues = buildJitterList(history)
         val avgJitterMs  = jitterValues.averageOrZero()
         val maxJitterMs  = jitterValues.maxOrElse(0f)

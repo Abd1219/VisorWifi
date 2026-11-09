@@ -68,8 +68,8 @@ fun setupRssiChartStyling(chart: LineChart) {
 
         // Estilización del Eje X (Línea de tiempo en segundos transcurridos)
         xAxis.apply {
-            textColor = Color.parseColor("#536371")
-            textSize = 9f
+            textColor = Color.parseColor("#8E9AA8")
+            textSize = 10f
             gridColor = Color.parseColor("#1C2331")
             gridLineWidth = 0.8f
             enableGridDashedLine(10f, 10f, 0f)
@@ -84,8 +84,8 @@ fun setupRssiChartStyling(chart: LineChart) {
 
         // Estilización del Eje Y Izquierdo (Intensidad de Señal RSSI en dBm)
         axisLeft.apply {
-            textColor = Color.parseColor("#536371")
-            textSize = 9f
+            textColor = Color.parseColor("#8E9AA8")
+            textSize = 10f
             gridColor = Color.parseColor("#1C2331")
             gridLineWidth = 0.8f
             enableGridDashedLine(10f, 10f, 0f)

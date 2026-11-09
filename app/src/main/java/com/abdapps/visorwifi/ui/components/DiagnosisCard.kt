@@ -113,11 +113,11 @@ fun DiagnosisCard(
             ) { targetState ->
                 when (targetState.status) {
                     DiagnosisStatus.LOADING -> DiagnosisLoadingContent()
-                    DiagnosisStatus.HEALTHY -> DiagnosisHealthyContent()
+                    DiagnosisStatus.HEALTHY -> DiagnosisHealthyContent(targetState)
                     DiagnosisStatus.WARNING -> DiagnosisResultContent(
                         accentColor    = ColorWarning,
-                        statusLabel    = "CALIDAD INESTABLE",
-                        title          = targetState.title,
+                        statusLabel    = "ATENCIÓN",
+                        title          = responsibleTitle(targetState.title),
                         confidence     = targetState.confidence,
                         evidences      = targetState.evidences,
                         recommendation = targetState.recommendation
@@ -125,7 +125,7 @@ fun DiagnosisCard(
                     DiagnosisStatus.PROBLEM -> DiagnosisResultContent(
                         accentColor    = ColorProblem,
                         statusLabel    = "PROBLEMA DETECTADO",
-                        title          = targetState.title,
+                        title          = responsibleTitle(targetState.title),
                         confidence     = targetState.confidence,
                         evidences      = targetState.evidences,
                         recommendation = targetState.recommendation
@@ -149,13 +149,13 @@ private fun DiagnosisHeader(accentColor: Color) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = "DIAGNÓSTICO DE RED",
+            text = "DIAGNÓSTICO HEURÍSTICO",
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = ColorLabel,
             letterSpacing = 1.sp
         )
-        // Ícono de diagnóstico — pastilla con color de acento
+        // La etiqueta aclara que se trata de reglas deterministas, no de IA.
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
@@ -163,7 +163,7 @@ private fun DiagnosisHeader(accentColor: Color) {
                 .padding(horizontal = 8.dp, vertical = 3.dp)
         ) {
             Text(
-                text = "🩺 AI",
+                text = "REGLAS ACTIVAS",
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = accentColor
@@ -226,41 +226,27 @@ private fun DiagnosisLoadingContent() {
  * Indicador verde con mensaje de confirmación de buena salud.
  */
 @Composable
-private fun DiagnosisHealthyContent() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(ColorHealthy.copy(alpha = 0.06f))
-            .padding(12.dp)
-    ) {
-        // Indicador circular verde
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(ColorHealthy.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = "✓", fontSize = 18.sp, color = ColorHealthy, fontWeight = FontWeight.Black)
-        }
-        Column {
-            Text(
-                text = "Red saludable",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = ColorHealthy
-            )
-            Text(
-                text = "Todos los parámetros dentro del rango normal",
-                fontSize = 11.sp,
-                color = ColorSubtext,
-                lineHeight = 15.sp
-            )
-        }
+private fun DiagnosisHealthyContent(state: DiagnosisState) = DiagnosisResultContent(
+    accentColor = ColorHealthy,
+    statusLabel = "SIN PROBLEMAS",
+    title = state.title,
+    confidence = state.confidence,
+    evidences = state.evidences,
+    recommendation = state.recommendation
+)
+
+/** Evita atribuir una causa al ISP cuando la evidencia solo ubica el problema fuera de la LAN. */
+private fun responsibleTitle(title: String): String =
+    if (title.equals("Posible problema del proveedor de internet", ignoreCase = true)) {
+        "Posible problema fuera de la red local"
+    } else {
+        title
     }
+
+private fun diagnosisSummary(statusLabel: String): String = when (statusLabel) {
+    "SIN PROBLEMAS" -> "La conexión se mantiene dentro de los rangos evaluados."
+    "ATENCIÓN" -> "Se detectaron variaciones que conviene seguir observando."
+    else -> "Se detectaron condiciones que pueden afectar la conexión."
 }
 
 /**
@@ -334,6 +320,13 @@ private fun DiagnosisResultContent(
             fontWeight = FontWeight.Bold,
             color = Color.White,
             lineHeight = 22.sp
+        )
+
+        Text(
+            text = diagnosisSummary(statusLabel),
+            fontSize = 12.sp,
+            color = ColorSubtext,
+            lineHeight = 17.sp
         )
 
         HorizontalDivider(color = ColorBorder)

@@ -2,7 +2,6 @@ package com.abdapps.visorwifi.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.abdapps.visorwifi.engine.NetworkDiagnosisEngine
-import com.abdapps.visorwifi.engine.ia.HybridDiagnosisEngine
 import com.abdapps.visorwifi.model.DiagnosisState
 import com.abdapps.visorwifi.model.DiagnosisStatus
 import com.abdapps.visorwifi.model.LatencyPoint
@@ -17,15 +16,9 @@ import kotlin.math.abs
  *
  * Se encarga de procesar los puntos telemétricos históricos provenientes del servicio
  * y convertirlos en métricas de red estructuradas [NetworkMetrics], alimentando al
- * motor de diagnóstico [NetworkDiagnosisEngine] e [HybridDiagnosisEngine].
+ * motor de diagnóstico heurístico [NetworkDiagnosisEngine].
  */
 class NetworkDiagnosisViewModel : ViewModel() {
-
-    /**
-     * Controla si el diagnóstico avanzado mediante IA de la Fase 2 está habilitado.
-     * Si es falso, se realiza únicamente la evaluación heurística de la Fase 1.
-     */
-    var isIaEnabled: Boolean = true
 
     private val _diagnosisState = MutableStateFlow(
         DiagnosisState(
@@ -57,8 +50,14 @@ class NetworkDiagnosisViewModel : ViewModel() {
             return
         }
 
+        val validLan = history.count { it.lanLatency >= 0f }
+        val validWan = history.count { it.wanLatency >= 0f }
         val metrics = calculateMetrics(history, rssi)
-        _diagnosisState.value = HybridDiagnosisEngine.evaluate(metrics, history, isIaEnabled)
+        _diagnosisState.value = NetworkDiagnosisEngine.evaluateDiagnosis(
+            metrics = metrics,
+            lanValidSamples = validLan,
+            wanValidSamples = validWan
+        )
     }
 
     /**

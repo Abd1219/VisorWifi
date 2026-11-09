@@ -69,8 +69,8 @@ fun setupChartStyling(chart: LineChart) {
         // Estilización de la leyenda informativa inferior
         legend.apply {
             isEnabled = true
-            textColor = Color.parseColor("#8E9AA8")
-            textSize = 10f
+            textColor = Color.parseColor("#B8C4D0")
+            textSize = 11f
             form = Legend.LegendForm.LINE
             formSize = 8f
             formLineWidth = 2f
@@ -83,8 +83,8 @@ fun setupChartStyling(chart: LineChart) {
 
         // Estilización del Eje X (Línea de tiempo en segundos transcurridos)
         xAxis.apply {
-            textColor = Color.parseColor("#536371")
-            textSize = 9f
+            textColor = Color.parseColor("#8E9AA8")
+            textSize = 10f
             gridColor = Color.parseColor("#1C2331")
             gridLineWidth = 0.8f
             enableGridDashedLine(10f, 10f, 0f)
@@ -100,8 +100,8 @@ fun setupChartStyling(chart: LineChart) {
 
         // Estilización del Eje Y Izquierdo (Latencia en milisegundos)
         axisLeft.apply {
-            textColor = Color.parseColor("#536371")
-            textSize = 9f
+            textColor = Color.parseColor("#8E9AA8")
+            textSize = 10f
             gridColor = Color.parseColor("#1C2331")
             gridLineWidth = 0.8f
             enableGridDashedLine(10f, 10f, 0f)
@@ -161,8 +161,8 @@ fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
 
     val dataSets = ArrayList<ILineDataSet>()
     // Siempre inyectar los 4 datasets en orden para consistencia de índices y evitar crashes
-    dataSets.add(createDataSet(lanEntries, "LAN (Acceso Local)", "#00F0FF"))
-    dataSets.add(createDataSet(wanEntries, "WAN (Internet)", "#D946EF"))
+    dataSets.add(createDataSet(lanEntries, "LAN ICMP (Acceso Local)", "#00F0FF"))
+    dataSets.add(createDataSet(wanEntries, "WAN ICMP (Internet)", "#D946EF"))
     dataSets.add(createJitterDataSet(lanJitterEntries, "#6600F0FF")) // LAN Jitter tenue
     dataSets.add(createJitterDataSet(wanJitterEntries, "#66D946EF")) // WAN Jitter tenue
 
@@ -238,8 +238,8 @@ fun addPointToChart(chart: LineChart, point: LatencyPoint) {
     var data = chart.data
 
     if (data == null) {
-        val lanDataSet = createDataSet(ArrayList(), "LAN (Acceso Local)", "#00F0FF")
-        val wanDataSet = createDataSet(ArrayList(), "WAN (Internet)", "#D946EF")
+        val lanDataSet = createDataSet(ArrayList(), "LAN ICMP (Acceso Local)", "#00F0FF")
+        val wanDataSet = createDataSet(ArrayList(), "WAN ICMP (Internet)", "#D946EF")
         val lanJitterDataSet = createJitterDataSet(ArrayList(), "#6600F0FF")
         val wanJitterDataSet = createJitterDataSet(ArrayList(), "#66D946EF")
         data = LineData(lanDataSet, wanDataSet, lanJitterDataSet, wanJitterDataSet)

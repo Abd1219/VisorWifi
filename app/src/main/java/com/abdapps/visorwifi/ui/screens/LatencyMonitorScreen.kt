@@ -49,7 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.abdapps.visorwifi.NetworkMonitorService
 import com.abdapps.visorwifi.analysis.PeriodAnalyzer
 import com.abdapps.visorwifi.analysis.PeriodStatusEvaluator
-import com.abdapps.visorwifi.engine.ia.HybridDiagnosisEngine
+import com.abdapps.visorwifi.engine.NetworkDiagnosisEngine
 import com.abdapps.visorwifi.model.LatencyPoint
 import com.abdapps.visorwifi.model.NetworkMetrics
 import com.abdapps.visorwifi.model.ReportData
@@ -67,6 +67,25 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private fun formatTcpFallback(latencyMs: Float, target: String?): String? {
+    if (target == null) return null
+    return if (latencyMs >= 0f) {
+        String.format(Locale.US, "TCP connect %s · %.1f ms", target, latencyMs)
+    } else {
+        "TCP connect $target · sin respuesta"
+    }
+}
+
+/** Etiquetas de lectura rápida; no intervienen en el cálculo de las métricas. */
+private fun latencyPresentationStatus(latencyMs: Float?, packetLoss: Float): String = when {
+    latencyMs == null -> "Esperando medición"
+    latencyMs < 0f -> "Sin respuesta ICMP"
+    packetLoss > 5f -> "Pérdida detectada"
+    latencyMs > 120f -> "Elevada"
+    latencyMs > 50f -> "Normal"
+    else -> "Estable"
+}
 
 /**
  * Pantalla principal del monitor de latencia.
@@ -224,7 +243,7 @@ fun LatencyMonitorScreen(
                     letterSpacing = 1.5.sp
                 )
                 Text(
-                    text = "Latencias LAN/WAN y Telemetría",
+                    text = "Telemetría en tiempo real",
                     fontSize = 12.sp,
                     color = Color(0xFF8E9AA8)
                 )
@@ -294,10 +313,15 @@ fun LatencyMonitorScreen(
                         color = Color.White
                     )
                 }
+                Text(
+                    text = if (isServiceRunning) "Recopilando datos de tu red" else "Inicia el monitoreo para recopilar datos",
+                    fontSize = 11.sp,
+                    color = Color(0xFF8E9AA8),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
 
             // Botón interactivo de monitoreo
-        // Botón interactivo de monitoreo
         Button(
             onClick = {
                 if (isServiceRunning) {
@@ -311,10 +335,10 @@ fun LatencyMonitorScreen(
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isServiceRunning) Color(0xFFFF3366)
                                  else Color(0xFF00F0FF),
-                contentColor = Color.Black
+                contentColor = if (isServiceRunning) Color.White else Color.Black
             ),
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Text(
                 text = if (isServiceRunning) "DETENER" else "MONITOREAR",
@@ -325,6 +349,9 @@ fun LatencyMonitorScreen(
         }
         }
 
+        // ── Resultado principal: primero explica qué ocurre ────────────────
+        DiagnosisCard(state = diagnosisState)
+
         // ── Tarjetas de Latencia LAN y WAN Instantáneas ────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -333,22 +360,26 @@ fun LatencyMonitorScreen(
             LatencyCard(
                 modifier = Modifier.weight(1f),
                 label = "LATENCIA LAN",
-                sublabel = "Acceso Local",
+                sublabel = "Acceso local · ICMP",
                 accentColor = Color(0xFF00F0FF),
                 value = latestPoint?.let {
                     if (it.lanLatency >= 0) String.format(Locale.US, "%.1f ms", it.lanLatency) else "Timeout"
                 } ?: "-- ms",
-                packetLoss = lanLoss
+                packetLoss = lanLoss,
+                statusText = latencyPresentationStatus(latestPoint?.lanLatency, lanLoss),
+                supplementalValue = latestPoint?.let { formatTcpFallback(it.lanTcpLatency, it.lanTcpTarget) }
             )
             LatencyCard(
                 modifier = Modifier.weight(1f),
                 label = "LATENCIA WAN",
-                sublabel = "Internet (8.8.8.8)",
+                sublabel = "Internet · ICMP (8.8.8.8)",
                 accentColor = Color(0xFFD946EF),
                 value = latestPoint?.let {
                     if (it.wanLatency >= 0) String.format(Locale.US, "%.1f ms", it.wanLatency) else "Timeout"
                 } ?: "-- ms",
-                packetLoss = wanLoss
+                packetLoss = wanLoss,
+                statusText = latencyPresentationStatus(latestPoint?.wanLatency, wanLoss),
+                supplementalValue = latestPoint?.let { formatTcpFallback(it.wanTcpLatency, it.wanTcpTarget) }
             )
         }
         // ── Tarjeta de Detalles e Información de Conexión WiFi ────────────
@@ -369,6 +400,12 @@ fun LatencyMonitorScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF536371),
                     modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
+                )
+                Text(
+                    text = "Nivel de señal en dBm · últimos datos capturados",
+                    fontSize = 10.sp,
+                    color = Color(0xFF8E9AA8),
+                    modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
                 )
                 
                 RssiChart(
@@ -396,6 +433,12 @@ fun LatencyMonitorScreen(
                     color = Color(0xFF536371),
                     modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
                 )
+                Text(
+                    text = "LAN en cyan · WAN en morado · jitter en trazo tenue",
+                    fontSize = 10.sp,
+                    color = Color(0xFF8E9AA8),
+                    modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+                )
                 
                 // Enlaza la vista tradicional XML de Android en el ecosistema declarativo de Jetpack Compose
                 LatencyChart(
@@ -406,9 +449,6 @@ fun LatencyMonitorScreen(
                 )
             }
         }
-
-        // ── Diagnóstico de Red ────────────────────────────────────────────────
-        DiagnosisCard(state = diagnosisState)
 
         // ── Registro e Historial Visual de Cambios de Antena / Roaming ──────
         if (roamEvents.isNotEmpty() || isServiceRunning) {
@@ -469,16 +509,16 @@ fun LatencyMonitorScreen(
 
                     val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
 
-                    // ── 3.5. Diagnóstico de IA sobre el periodo completo (Historial completo de la sesión) ─
+                    // ── 3.5. Diagnóstico heurístico sobre el periodo completo ───────────────
                     val reportMetrics = NetworkMetrics.fromPeriodAnalysis(
                         analysis = periodAnalysis,
                         phyRateMbps = phyRate,
                         latestRssi = rssi
                     )
-                    val reportDiagnosis = HybridDiagnosisEngine.evaluateSession(
+                    val reportDiagnosis = NetworkDiagnosisEngine.evaluateDiagnosis(
                         metrics = reportMetrics,
-                        history = historyList,
-                        isIaEnabled = diagnosisViewModel.isIaEnabled
+                        lanValidSamples = historyList.count { it.lanLatency >= 0f },
+                        wanValidSamples = historyList.count { it.wanLatency >= 0f }
                     )
 
                     // ── 4. Conclusión ejecutiva basada en el análisis del periodo ───────────

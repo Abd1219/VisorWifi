@@ -6,7 +6,7 @@ Este documento detalla el diseño de arquitectura, los flujos de datos y los pat
 
 ## 1. Visión General de Arquitectura
 
-VisorWifi sigue los principios de **Clean Architecture** adaptados a aplicaciones de diagnóstico en tiempo real:
+VisorWifi organiza el código por responsabilidades (UI, ViewModels, motores y acceso al sistema), con algunas dependencias directas entre capas:
 
 ```
 [ Capa de Presentación (UI) ]
@@ -18,7 +18,7 @@ VisorWifi sigue los principios de **Clean Architecture** adaptados a aplicacione
         │
         ▼
 [ Capa de Dominio y Motores ]
-  NetworkDiagnosisEngine / HybridDiagnosisEngine / RssiDirectionAnalyzer / ConfidenceCalculator / PdfGenerator
+  NetworkDiagnosisEngine (activo) / HybridDiagnosisEngine (prototipo inactivo) / RssiDirectionAnalyzer / ConfidenceCalculator / PdfGenerator
         │
         ▼
 [ Capa de Servicios y Proveedores de Datos ]
@@ -41,11 +41,11 @@ sequenceDiagram
 
     loop Cada 1 Segundo (1Hz)
         OS->>NMS: Lectura de WifiInfo (BSSID, RSSI, freq, speeds)
-        NMS->>OS: Ping ICMP / TCP Fallback (Gateway & 8.8.8.8)
-        OS-->>NMS: Latencias RTT (ms)
+        NMS->>OS: Ping ICMP / TCP connect complementario
+        OS-->>NMS: ICMP y TCP registrados por separado
         NMS->>Flow: Emit(LatencyPoint)
         Flow->>VM: Actualizar historial circular (600 pts)
-        VM->>VM: Calcular métricas y evaluar diagnóstico / AP Locator
+        VM->>VM: Calcular métricas ICMP y evaluar reglas heurísticas
         VM->>UI: Recomposición reactiva por StateFlow
     end
 ```
@@ -53,8 +53,9 @@ sequenceDiagram
 ### 2.2 Flujo Desacoplado para AP Locator (`WifiInfoProvider`)
 Cuando el usuario entra directamente a la pantalla de **AP Locator** sin tener iniciado el servicio de monitoreo en segundo plano, `ApLocatorViewModel` ejecuta un polling directo e independiente mediante `WifiInfoProvider`:
 - Consulta `WifiSnapshot` instantáneo cada 1 segundo en una corrutina aislada con `viewModelScope`.
-- Obtiene escaneo de puntos de acceso visibles (`getAvailableAps`) sin acoplarse al servicio de latencias.
+- Lee los resultados de escaneo que Android tenga disponibles (`getAvailableAps`); no solicita un escaneo nuevo en cada consulta, por lo que pueden estar desactualizados.
 - Registra muestras atómicas `RssiOrientationSample` durante la calibración 360°.
+- La captura compara el BSSID conectado con el BSSID seleccionado y detiene la medición si difieren. En la práctica, la estimación requiere estar conectado al AP seleccionado.
 
 ---
 
@@ -91,30 +92,18 @@ Factor | Peso (%) | Fórmula / Umbrales
 
 ---
 
-## 4. Motor de Diagnóstico Híbrido de Red
+## 4. Diagnóstico de red y trabajo futuro de IA
+
+El monitor y los reportes usan actualmente `NetworkDiagnosisEngine`, un motor determinista basado en reglas. Utiliza estadísticas ICMP; si no hay respuestas ICMP suficientes, el monitor comunica que faltan datos para diagnosticar en vez de convertir una sonda TCP en latencia ICMP.
+
+Los archivos `engine/ia/LightWeightClassifier` y `HybridDiagnosisEngine` conservan un prototipo determinista de puntuación heurística, pero no están conectados al monitor ni a los reportes. No hay IA ni aprendizaje automático implementado. Una IA real queda como trabajo futuro.
 
 ```
-                     ┌──────────────────────────────┐
-                     │    NetworkMetrics (10-300s)  │
-                     └──────────────┬───────────────┘
-                                    │
-            ┌───────────────────────┴───────────────────────┐
-            ▼                                               ▼
-┌────────────────────────┐                     ┌────────────────────────┐
-│ NetworkDiagnosisEngine │                     │ LightWeightClassifier  │
-│   (Fase 1 Heurística)  │                     │   (Fase 2 IA Local)    │
-│   (Reglas rígidas ms)  │                     │   (Puntuación ventana) │
-└───────────┬────────────┘                     └───────────┬────────────┘
-            │                                               │
-            └───────────────────────┬───────────────────────┘
-                                    ▼
-                       ┌─────────────────────────┐
-                       │  HybridDiagnosisEngine  │
-                       │   (Fusión e Inferencia) │
-                       └────────────┬────────────┘
-                                    ▼
-                           [DiagnosisState]
-```
+`NetworkMetrics` (ICMP) → `NetworkDiagnosisEngine` → `DiagnosisState`
+
+El prototipo de `engine/ia` está fuera de este flujo.
+
+Las sondas TCP se ejecutan como comprobación complementaria cuando ICMP falla. Sus tiempos y destinos se guardan por separado, se muestran en la tarjeta y el PDF, y no participan en las gráficas ni estadísticas ICMP de latencia, jitter o pérdida.
 
 ---
 
@@ -130,18 +119,19 @@ El módulo `PdfGenerator` renderiza reportes ejecutivos vectoriales de 2 página
 
 ## 6. Estrategia de Pruebas Unitarias
 
-Todas las pruebas unitarias se encuentran en `app/src/test/java/`.
+Las pruebas unitarias presentes se encuentran en `app/src/test/java/`.
 
-### Suites de Pruebas Principales:
-1. **`RssiDirectionAnalyzerTest`**: Verificación de filtros de mediana, medias móviles, binned angular y cálculo de centroide circular.
-2. **`ConfidenceCalculatorTest`**: Evaluación de los 5 factores ponderados bajo distintos escenarios de señal y movimiento.
-3. **`ApLocatorIndependenceTest`**: Validación de aislamiento e interoperabilidad del AP Locator operando con y sin `NetworkMonitorService`.
-4. **`PdfSanitizerTest`**: Pruebas exhaustivas de sanitización tipográfica (ligaduras latinas, guiones en-dash/em-dash, emojis y símbolos matemáticos).
-5. **`PeriodAnalyzerTest` & `PeriodStatusEvaluatorTest`**: Cálculo de percentiles, jitter y estados de periodos para reportes.
-6. **`HybridDiagnosisEngineTest` & `LightWeightClassifierTest`**: Clasificación determinista de anomalías y resolución de discrepancias heurísticas.
+### Suites presentes:
+1. **`RssiDirectionAnalyzerTest`**: Filtros, bins angulares, estimación y casos de baja cobertura.
+2. **`ApLocatorIndependenceTest`**: Casos relacionados con el funcionamiento desacoplado del AP Locator.
+3. **`NetworkDiagnosisEngineTest`**: Casos saludables, WAN degradada, señal débil y ausencia de muestras ICMP.
+4. **`PdfSanitizerTest`**: Sanitización de texto para PDF.
+5. **`ExampleUnitTest`**: Prueba de ejemplo.
+
+No hay suites específicas presentes para `ConfidenceCalculator`, `PeriodAnalyzer`, `PeriodStatusEvaluator`, `HybridDiagnosisEngine` o `LightWeightClassifier`.
 
 ### Regla Fundamental:
-Los algoritmos (`RssiDirectionAnalyzer`, `ConfidenceCalculator`, `PeriodAnalyzer`, `LightWeightClassifier`, `PdfGenerator.sanitizePdfText`) deben ser **funciones puras** independientes del framework de Android. Esto permite ejecutar la suite completa de pruebas unitarias en **< 30 segundos** sin requerir Robolectric ni emulador.
+Los motores que se quieran probar como lógica JVM deben evitar dependencias Android. El clasificador experimental ya no depende de `android.util.Log`. No se ha medido aquí el tiempo de ejecución de la suite.
 
 ### Comando para Ejecución de Pruebas:
 ```powershell

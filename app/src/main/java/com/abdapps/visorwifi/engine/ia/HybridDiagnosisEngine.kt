@@ -1,6 +1,5 @@
 package com.abdapps.visorwifi.engine.ia
 
-import android.util.Log
 import com.abdapps.visorwifi.engine.NetworkDiagnosisEngine
 import com.abdapps.visorwifi.model.DiagnosisState
 import com.abdapps.visorwifi.model.DiagnosisStatus
@@ -9,21 +8,18 @@ import com.abdapps.visorwifi.model.NetworkMetrics
 import java.util.Locale
 
 /**
- * Orquestador e integrador híbrido de diagnóstico de red.
+ * Prototipo de combinación heurística de diagnóstico de red (no conectado al monitor actual).
  *
- * Consolida la Fase 1 (reglas heurísticas instantáneas) y la Fase 2 (inferencia de IA
- * basada en ventanas de tiempo históricas). Resuelve conflictos y calcula la confianza final.
+ * Consolida reglas actuales con un clasificador experimental de puntuación. No implementa IA/ML.
  */
 object HybridDiagnosisEngine {
-
-    private const val TAG = "HybridDiagnosisEngine"
 
     /**
      * Evalúa de forma híbrida las métricas inmediatas y el historial completo para producir un diagnóstico unificado.
      *
      * @param metrics     Métricas consolidadas a corto plazo (Fase 1).
      * @param history     Historial de telemetría de red para análisis de ventana (Fase 2).
-     * @param isIaEnabled Flag para activar/desactivar la inferencia por IA.
+     * @param isIaEnabled Conservado por compatibilidad del prototipo; no activa una IA real.
      * @return El estado de diagnóstico unificado [DiagnosisState].
      */
     fun evaluate(
@@ -35,16 +31,14 @@ object HybridDiagnosisEngine {
         val ruleState = NetworkDiagnosisEngine.evaluateDiagnosis(metrics)
 
         if (!isIaEnabled) {
-            Log.d(TAG, "Diagnóstico híbrido - IA desactivada. Retornando Fase 1.")
             return ruleState
         }
 
-        // 2. Extraer características por ventana temporal (últimos 120-300 puntos)
-        // Usamos los últimos 300 puntos de la sesión (ventana de ~300 segundos a 1Hz)
+        // Analiza los últimos 300 puntos mediante el prototipo de puntuación heurística.
         val windowHistory = history.takeLast(300)
         val features = NetworkFeatures.fromHistory(windowHistory)
 
-        // 3. Ejecutar inferencia de IA local (Fase 2)
+        // Ejecutar el prototipo heurístico (sin modelo de IA/ML).
         val iaResult = LightWeightClassifier.classify(features)
 
         // 4. Mapear salida de la IA a un DiagnosisState representativo
@@ -67,14 +61,13 @@ object HybridDiagnosisEngine {
         val ruleState = NetworkDiagnosisEngine.evaluateDiagnosis(metrics)
 
         if (!isIaEnabled) {
-            Log.d(TAG, "Diagnóstico híbrido completo - IA desactivada. Retornando Fase 1.")
             return ruleState
         }
 
         // 2. Extraer características de todo el historial acumulado
         val features = NetworkFeatures.fromHistory(history)
 
-        // 3. Ejecutar inferencia de IA local
+        // Ejecutar el prototipo heurístico (sin modelo de IA/ML).
         val iaResult = LightWeightClassifier.classify(features)
 
         // 4. Mapear salida de la IA a DiagnosisState
@@ -85,7 +78,7 @@ object HybridDiagnosisEngine {
     }
 
     /**
-     * Mapea el resultado del clasificador de IA local a una estructura de estado legible.
+     * Mapea el resultado del prototipo heurístico a un estado legible.
      */
     private fun mapIaResultToState(iaResult: IaDiagnosisResult, features: NetworkFeatures): DiagnosisState {
         val status = when (iaResult.predictedClass) {
@@ -96,7 +89,7 @@ object HybridDiagnosisEngine {
         }
 
         val title = when (iaResult.predictedClass) {
-            IaDiagnosisClass.HEALTHY -> "Red saludable (Análisis IA)"
+            IaDiagnosisClass.HEALTHY -> "Red saludable (análisis estadístico)"
             IaDiagnosisClass.WIFI_INTERFERENCE -> "Interferencia de canal Wi-Fi"
             IaDiagnosisClass.WEAK_SIGNAL -> "Señal Wi-Fi deficiente"
             IaDiagnosisClass.ISP_PROBLEM -> "Inestabilidad en el Proveedor de Internet (ISP)"
@@ -175,7 +168,6 @@ object HybridDiagnosisEngine {
             }
 
             combinedRecommendation = ruleState.recommendation
-            Log.d(TAG, "Fusión Híbrida - Coincidencia detectada ($ruleClass). Confianza aumentada a $combinedConfidence%")
         } else {
             // --- DISCREPANCIA ---
             // Reducir confianza (-20, piso de 40)
@@ -209,7 +201,6 @@ object HybridDiagnosisEngine {
             } else {
                 ruleState.recommendation
             }
-            Log.d(TAG, "Fusión Híbrida - Discrepancia ($ruleClass vs $iaClass). Confianza reducida a $combinedConfidence% y severidad ajustada.")
         }
 
         return DiagnosisState(

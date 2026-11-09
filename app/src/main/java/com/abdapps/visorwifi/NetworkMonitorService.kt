@@ -22,7 +22,6 @@ import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.Random
 
 /**
  * Servicio en primer plano (Foreground Service) encargado de monitorear el rendimiento de la red.
@@ -103,8 +102,13 @@ class NetworkMonitorService : Service() {
      */
     val roamingFlow = _roamingFlow.asSharedFlow()
 
-    private val random = Random()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
+
+    private data class ProbeResult(
+        val icmpLatencyMs: Float,
+        val tcpLatencyMs: Float = -1f,
+        val tcpTarget: String? = null
+    )
 
     /**
      * Binder local personalizado para permitir el acceso directo a la instancia del servicio.
@@ -161,44 +165,28 @@ class NetworkMonitorService : Service() {
                 checkForRoaming(wifiInfo)
 
                 // 4. Medir latencias de manera concurrente para evitar bloqueos secuenciales
-                val lanDeferred = async(Dispatchers.IO) {
-                    var result = executePing(gatewayIp)
-                    // Fallback 1: Si falla ICMP (ping ordinario), intentar establecer conexión TCP en puertos comunes
-                    if (result < 0) {
-                        result = measureTcpLatency(gatewayIp, 53) // DNS
-                        if (result < 0) {
-                            result = measureTcpLatency(gatewayIp, 80) // HTTP
-                        }
-                    }
-                    result
-                }
-
+                val lanDeferred = async(Dispatchers.IO) { measureProbe(gatewayIp, listOf(53, 80)) }
                 val wanDeferred = async(Dispatchers.IO) {
-                    var result = executePing("8.8.8.8")
-                    // Fallback 1: Si falla ping a DNS de Google, intentar por socket TCP
-                    if (result < 0) {
-                        result = measureTcpLatency("8.8.8.8", 53)
-                        if (result < 0) {
-                            // Fallback 2: Intentar conexión a DNS de Cloudflare en caso de que Google no responda
-                            result = measureTcpLatency("1.1.1.1", 53)
-                        }
-                    }
-                    result
+                    measureProbe("8.8.8.8", listOf(53), alternateTargets = listOf("1.1.1.1" to 53))
                 }
 
                 // Esperar a que ambas mediciones concurrentes terminen
                 val lanResult = lanDeferred.await()
                 val wanResult = wanDeferred.await()
 
-                // 5. Reportar mediciones reales directamente. Si fallan (valor -1f), se reportan como tal para reflejar la realidad.
-                val lanLatency = lanResult
-                val wanLatency = wanResult
+                // 5. Conservar ICMP y TCP por separado; -1f indica que no hubo respuesta de ese tipo.
+                val lanLatency = lanResult.icmpLatencyMs
+                val wanLatency = wanResult.icmpLatencyMs
 
                 // 6. Construir el nuevo punto de latencia telemétrico
                 val point = LatencyPoint(
                     timestamp = System.currentTimeMillis(),
                     lanLatency = lanLatency,
                     wanLatency = wanLatency,
+                    lanTcpLatency = lanResult.tcpLatencyMs,
+                    lanTcpTarget = lanResult.tcpTarget,
+                    wanTcpLatency = wanResult.tcpLatencyMs,
+                    wanTcpTarget = wanResult.tcpTarget,
                     ssid = wifiInfo?.ssid?.removeSurrounding("\""),
                     bssid = wifiInfo?.bssid,
                     rssi = wifiInfo?.rssi ?: -127,
@@ -228,9 +216,11 @@ class NetworkMonitorService : Service() {
                     "Monitoreo de Red Activo",
                     String.format(
                         Locale.US,
-                        "LAN: %.1f ms | WAN: %.1f ms%s%s",
-                        lanLatency,
-                        wanLatency,
+                        "LAN ICMP: %s%s | WAN ICMP: %s%s%s%s",
+                        formatProbeValue(lanLatency),
+                        formatTcpSummary(lanResult),
+                        formatProbeValue(wanLatency),
+                        formatTcpSummary(wanResult),
                         if (band.isNotEmpty()) " | $band" else "",
                         rssiText
                     )
@@ -399,13 +389,13 @@ class NetworkMonitorService : Service() {
     }
 
     /**
-     * Método alternativo de medición de RTT (Fallback) estableciendo un Socket TCP contra un puerto específico.
-     * Se usa en escenarios donde el Gateway o los firewalls de red descartan paquetes ICMP (Ping silencioso).
+     * Sonda TCP complementaria: mide el tiempo hasta completar o recibir rechazo del handshake TCP.
+     * Este valor se conserva aparte y no se interpreta como RTT ICMP.
      *
      * @param ip Dirección del host de destino.
      * @param port Puerto de destino (comúnmente 53 para DNS o 80 para HTTP).
      * @param timeoutMs Límite de tiempo de espera en milisegundos.
-     * @return Latencia RTT medida en milisegundos, o -1f en caso de excepción por timeout o red caída.
+     * @return Tiempo de conexión TCP en milisegundos, o -1f si la conexión expira o falla.
      */
     private fun measureTcpLatency(ip: String, port: Int, timeoutMs: Int = 800): Float {
         val socket = java.net.Socket()
@@ -418,8 +408,7 @@ class NetworkMonitorService : Service() {
             // Convertir nanosegundos de delta a milisegundos flotantes
             (endTime - startTime) / 1_000_000f
         } catch (e: java.net.ConnectException) {
-            // Si el host rechaza activamente la conexión (Connection Refused), significa que está vivo
-            // y respondió el paquete TCP RST, lo que representa un RTT válido de red.
+            // Connection Refused también confirma que el host respondió; se mide el tiempo hasta el rechazo.
             val endTime = System.nanoTime()
             (endTime - startTime) / 1_000_000f
         } catch (e: Exception) {
@@ -429,26 +418,44 @@ class NetworkMonitorService : Service() {
         }
     }
 
-    /**
-     * Generador de datos sintéticos de alta fidelidad para simulación del comportamiento de red.
-     * Se activa automáticamente como fallback cuando el dispositivo se queda sin red física o WiFi.
-     * Emula un comportamiento realista que incluye ruidos de banda base y picos esporádicos de lag.
-     *
-     * @param isLan True para simular latencia local al gateway (2-8 ms). False para simular latencia WAN (18-32 ms).
-     * @return Latencia simulada en milisegundos.
-     */
-    private fun getSimulatedLatency(isLan: Boolean): Float {
-        return if (isLan) {
-            val base = 2.0f + random.nextFloat() * 6.0f
-            // 2% de probabilidad de tener un pico de retraso provocado por interferencias
-            val isSpike = random.nextFloat() < 0.02f
-            if (isSpike) base + 35f + random.nextFloat() * 40f else base
-        } else {
-            val base = 18.0f + random.nextFloat() * 14.0f
-            // 3% de probabilidad de tener un pico de retraso WAN provocado por congestión
-            val isSpike = random.nextFloat() < 0.03f
-            if (isSpike) base + 60f + random.nextFloat() * 70f else base
+    private fun measureProbe(
+        primaryTarget: String,
+        primaryPorts: List<Int>,
+        alternateTargets: List<Pair<String, Int>> = emptyList()
+    ): ProbeResult {
+        val icmpLatency = executePing(primaryTarget)
+        if (icmpLatency >= 0f) return ProbeResult(icmpLatencyMs = icmpLatency)
+
+        var lastTarget: String? = null
+        for (target in buildList {
+            primaryPorts.forEach { add(primaryTarget to it) }
+            addAll(alternateTargets)
+        }) {
+            lastTarget = "${target.first}:${target.second}"
+            val tcpLatency = measureTcpLatency(target.first, target.second)
+            if (tcpLatency >= 0f) {
+                return ProbeResult(
+                    icmpLatencyMs = -1f,
+                    tcpLatencyMs = tcpLatency,
+                    tcpTarget = lastTarget
+                )
+            }
         }
+        return ProbeResult(icmpLatencyMs = -1f, tcpTarget = lastTarget)
+    }
+
+    private fun formatProbeValue(latencyMs: Float): String =
+        if (latencyMs >= 0f) String.format(Locale.US, "%.1f ms", latencyMs) else "sin respuesta"
+
+    private fun formatTcpSummary(result: ProbeResult): String = when {
+        result.tcpLatencyMs >= 0f -> String.format(
+            Locale.US,
+            " | TCP %s %.1f ms",
+            result.tcpTarget,
+            result.tcpLatencyMs
+        )
+        result.tcpTarget != null -> " | TCP ${result.tcpTarget} sin respuesta"
+        else -> ""
     }
 
     /**
