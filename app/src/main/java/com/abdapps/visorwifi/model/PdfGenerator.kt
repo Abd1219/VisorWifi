@@ -15,981 +15,120 @@ import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
+import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
-/**
- * Clase encargada de generar un archivo PDF profesional a partir de los datos telemétricos y del técnico.
- * No utiliza capturas de pantalla, sino que dibuja el documento de manera programática en un Canvas de PDF,
- * incluyendo la renderización de las gráficas de MPAndroidChart fuera de pantalla (off-screen).
- */
+/** PDF presentation layer. Its input is precomputed [ReportData]; no network metrics are changed here. */
 object PdfGenerator {
+    private const val W = 595; private const val H = 842; private const val M = 42f
+    private const val CW = W - M * 2; private const val FOOTER = H - 28f
+    // Raw ARGB values keep text-sanitizer unit tests loadable on the plain JVM.
+    private val ink = 0xFF0F172A.toInt(); private val muted = 0xFF64748B.toInt()
+    private val cyan = 0xFF00AFC0.toInt(); private val purple = 0xFF7C3AED.toInt()
+    private val border = 0xFFD8E1EA.toInt()
 
-    // Tamaño de página A4 estándar en puntos (72 puntos por pulgada)
-    private const val PAGE_WIDTH = 595
-    private const val PAGE_HEIGHT = 842
-    private const val MARGIN = 45f
-
-    /**
-     * Genera el PDF en el directorio de caché de la aplicación y retorna el archivo creado.
-     *
-     * @param context Contexto de la aplicación.
-     * @param data Datos consolidados a escribir en el reporte.
-     * @return Archivo PDF generado.
-     */
     fun generateReport(context: Context, data: ReportData): File {
-        val pdfDocument = PdfDocument()
-        
-        // --- PÁGINA 1: Encabezado, Resumen, Indicadores, Diagnóstico y Notas ---
-        val pageInfo1 = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
-        val page1 = pdfDocument.startPage(pageInfo1)
-        val canvas1 = page1.canvas
-        drawPage1(context, canvas1, data)
-        pdfDocument.finishPage(page1)
-
-        // --- PÁGINA 2: Gráficas de Evidencia, Eventos de Red y Firmas ---
-        val pageInfo2 = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 2).create()
-        val page2 = pdfDocument.startPage(pageInfo2)
-        val canvas2 = page2.canvas
-        drawPage2(context, canvas2, data)
-        pdfDocument.finishPage(page2)
-
-        // Crear directorio temporal de reportes si no existe
-        val reportsDir = File(context.cacheDir, "reports")
-        if (!reportsDir.exists()) {
-            reportsDir.mkdirs()
-        }
-
-        // Crear archivo final con marca de tiempo para evitar colisiones
-        val timestamp = System.currentTimeMillis()
-        val file = File(reportsDir, "reporte_visorwifi_$timestamp.pdf")
-        val outputStream = FileOutputStream(file)
-        pdfDocument.writeTo(outputStream)
-        pdfDocument.close()
-        outputStream.close()
-
-        return file
-    }
-
-    /**
-     * Dibuja los elementos de la primera página del reporte.
-     */
-    private fun drawPage1(context: Context, canvas: Canvas, data: ReportData) {
-        var currentY = MARGIN
-
-        // 1. Cabecera (Header)
-        val titlePaint = TextPaint().apply {
-            color = Color.parseColor("#0F172A") // Slate Oscuro
-            textSize = 18f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText("VISOR WIFI"), MARGIN, currentY + 16f, titlePaint)
-
-        val reportTypePaint = TextPaint().apply {
-            color = Color.parseColor("#0284C7") // Azul Tech
-            textSize = 11f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText(data.reportType.uppercase(Locale.getDefault())), MARGIN, currentY + 32f, reportTypePaint)
-
-        // Metadatos de la cabecera (Fecha, Técnico, Sitio)
-        val metaPaint = TextPaint().apply {
-            color = Color.parseColor("#475569")
-            textSize = 8.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-        val rightAlignX = PAGE_WIDTH - MARGIN - 160f
-        canvas.drawText(sanitizePdfText("Fecha/Hora: ${data.dateTime}"), rightAlignX, currentY + 14f, metaPaint)
-        canvas.drawText(sanitizePdfText("Técnico: ${data.technicianName}"), rightAlignX, currentY + 26f, metaPaint)
-        canvas.drawText(sanitizePdfText("Sitio: ${data.siteName}"), rightAlignX, currentY + 38f, metaPaint)
-
-        currentY += 52f
-
-        // Línea divisoria elegante
-        val linePaint = Paint().apply {
-            color = Color.parseColor("#CBD5E1")
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-        }
-        canvas.drawLine(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY, linePaint)
-        currentY += 16f
-
-        // 2. Resumen Ejecutivo (Executive Summary Card)
-        val cardPaint = Paint().apply {
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-        val cardBorderPaint = Paint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-            isAntiAlias = true
-        }
-
-        // Elegir color según el estado del PERIODO analizado (no el estado instantáneo)
-        val (statusText, statusColor, cardBg) = when (data.periodStatus) {
-            PeriodReportStatus.OPTIMAL   -> Triple("ESTADO DEL PERIODO: ÓPTIMO",    "#16A34A", "#F0FDF4") // Verde
-            PeriodReportStatus.DEGRADED  -> Triple("ESTADO DEL PERIODO: DEGRADADO", "#EA580C", "#FFF7ED") // Naranja
-            PeriodReportStatus.UNSTABLE  -> Triple("ESTADO DEL PERIODO: INESTABLE", "#D97706", "#FFFBEB") // Ámbar
-            PeriodReportStatus.CRITICAL  -> Triple("ESTADO DEL PERIODO: CRÍTICO",   "#DC2626", "#FEF2F2") // Rojo
-        }
-
-        cardPaint.color = Color.parseColor(cardBg)
-        cardBorderPaint.color = Color.parseColor(statusColor)
-
-        // Dibujar tarjeta de estado general
-        val cardHeight = 100f
-        val rect = RectF(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY + cardHeight)
-        canvas.drawRoundRect(rect, 6f, 6f, cardPaint)
-        canvas.drawRoundRect(rect, 6f, 6f, cardBorderPaint)
-
-        // Texto de estado (bandera de periodo)
-        val cardTextTitlePaint = TextPaint().apply {
-            color = Color.parseColor(statusColor)
-            textSize = 10f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText(statusText), MARGIN + 12f, currentY + 18f, cardTextTitlePaint)
-
-        // Rango temporal del periodo analizado
-        val periodSdf = java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-        val periodStartStr = periodSdf.format(java.util.Date(data.periodAnalysis.periodStartMs))
-        val periodEndStr   = periodSdf.format(java.util.Date(data.periodAnalysis.periodEndMs))
-        val durationSecs   = (data.periodAnalysis.periodEndMs - data.periodAnalysis.periodStartMs) / 1000L
-        val durationStr    = when {
-            durationSecs < 60   -> "${durationSecs}s"
-            durationSecs < 3600 -> "${durationSecs / 60}m ${durationSecs % 60}s"
-            else                -> "${durationSecs / 3600}h ${(durationSecs % 3600) / 60}m"
-        }
-        val periodLabelPaint = TextPaint().apply {
-            color = Color.parseColor("#64748B")
-            textSize = 7.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(
-            sanitizePdfText("Periodo analizado: $periodStartStr - $periodEndStr (~ $durationStr, ${data.periodAnalysis.sampleCount} muestras)"),
-            MARGIN + 12f, currentY + 30f, periodLabelPaint
-        )
-
-        // Score de estabilidad
-        val scoreLabel = "Score de estabilidad del periodo: ${data.periodAnalysis.stabilityScore}/100"
-        val scoreColor = when {
-            data.periodAnalysis.stabilityScore >= 80 -> "#16A34A"
-            data.periodAnalysis.stabilityScore >= 60 -> "#EA580C"
-            data.periodAnalysis.stabilityScore >= 40 -> "#D97706"
-            else                                     -> "#DC2626"
-        }
-        val scorePaint = TextPaint().apply {
-            color = Color.parseColor(scoreColor)
-            textSize = 8f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText(scoreLabel), MARGIN + 12f, currentY + 42f, scorePaint)
-
-        // Conclusión ejecutiva (texto libre, debajo del score)
-        val cardTextPaint = TextPaint().apply {
-            color = Color.parseColor("#334155")
-            textSize = 8f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-        val textWidth = PAGE_WIDTH - (MARGIN * 2) - 24f
-        drawTextWrapped(
-            canvas = canvas,
-            text = data.executiveConclusion,
-            x = MARGIN + 12f,
-            y = currentY + 52f,
-            width = textWidth,
-            paint = cardTextPaint
-        )
-
-        // Nota técnica aclaratoria (pie de la tarjeta)
-        val notePaint = TextPaint().apply {
-            color = Color.parseColor("#94A3B8")
-            textSize = 6.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(
-            sanitizePdfText("[!] Este estado resume el comportamiento del enlace durante el periodo completo, no el último instante."),
-            MARGIN + 12f, currentY + cardHeight - 6f, notePaint
-        )
-
-        currentY += cardHeight + 18f
-
-        // 3. Tabla de Indicadores Clave (4 Columnas)
-        val secTitlePaint = TextPaint().apply {
-            color = Color.parseColor("#0F172A")
-            textSize = 11f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText("Métricas del Periodo Analizado"), MARGIN, currentY, secTitlePaint)
-        currentY += 8f
-
-        val colWidths = listOf(140f, 75f, 75f, 215f)
-        val rowHeight = 18f
-        val thBgPaint = Paint().apply { color = Color.parseColor("#F1F5F9") }
-        val tdBgPaintEven = Paint().apply { color = Color.parseColor("#F8FAFC") }
-        val tdBgPaintOdd = Paint().apply { color = Color.WHITE }
-
-        val tableHeaderPaint = TextPaint().apply {
-            color = Color.parseColor("#1E293B")
-            textSize = 8f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        val tableCellPaint = TextPaint().apply {
-            color = Color.parseColor("#334155")
-            textSize = 8f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-
-        // Encabezados de tabla
-        drawTableRow(
-            canvas, MARGIN, currentY, colWidths, rowHeight,
-            listOf("Métrica Evaluada", "Resultado", "Estado", "Rango de Referencia / Explicación"),
-            tableHeaderPaint, thBgPaint
-        )
-        currentY += rowHeight
-
-        // ─── Tabla de Indicadores de PERIODO ─────────────────────────────────────
-        val lanText = if (data.lanLatencyAvgMs >= 0) String.format(Locale.US, "%.2f ms", data.lanLatencyAvgMs) else "Timeout"
-        val wanText = if (data.wanLatencyAvgMs >= 0) String.format(Locale.US, "%.2f ms", data.wanLatencyAvgMs) else "Timeout"
-        val phyText = "${data.phyRateMbps} Mbps"
-        val p       = data.periodAnalysis
-
-        val rows = listOf(
-            listOf(
-                "Latencia LAN prom. (Periodo)",
-                lanText,
-                if (data.lanLatencyAvgMs < 0) "Timeout" else if (data.lanLatencyAvgMs < 15f) "Óptimo" else if (data.lanLatencyAvgMs < 50f) "Aceptable" else "Inestable",
-                "Ref: < 15 ms (Óptimo) | > 50 ms (Inestable)"
-            ),
-            listOf(
-                "Picos LAN > 50 ms (Periodo)",
-                "${p.lanSpikeCount} eventos",
-                if (p.lanSpikeCount == 0) "Óptimo" else if (p.lanSpikeCount < 5) "Degradado" else "Crítico",
-                "Ref: 0 (Óptimo) | 1-4 (Degradado) | >= 5 (Crítico)"
-            ),
-            listOf(
-                "Latencia WAN prom. (Periodo)",
-                wanText,
-                if (data.wanLatencyAvgMs < 0) "Timeout" else if (data.wanLatencyAvgMs < 100f) "Óptimo" else if (data.wanLatencyAvgMs < 150f) "Degradado" else if (data.wanLatencyAvgMs < 200f) "Inestable" else "Crítico",
-                "Ref: < 100 ms (Estable) | > 200 ms (Crítico)"
-            ),
-            listOf(
-                "Picos WAN > 200 ms (Periodo)",
-                "${p.latencySpikeCount} eventos",
-                if (p.latencySpikeCount < 2) "Óptimo" else if (p.latencySpikeCount < 5) "Degradado" else if (p.latencySpikeCount < 10) "Inestable" else "Crítico",
-                "Ref: 0-1 (Óptimo) | 2-4 (Degradado) | >= 10 (Crítico)"
-            ),
-            listOf(
-                "Pérdida de Paquetes WAN",
-                String.format(Locale.US, "%.1f%%", p.packetLossPercent),
-                if (p.packetLossPercent < 2f) "Óptimo" else if (p.packetLossPercent < 5f) "Degradado" else if (p.packetLossPercent < 10f) "Inestable" else "Crítico",
-                "Ref: < 2% (Óptimo) | > 10% (Crítico)"
-            ),
-            listOf(
-                "Jitter WAN prom. (Periodo)",
-                String.format(Locale.US, "%.1f ms", p.avgJitterMs),
-                if (p.avgJitterMs < 15f) "Óptimo" else if (p.avgJitterMs < 30f) "Aceptable" else "Inestable",
-                "Ref: < 15 ms (Óptimo) | > 50 ms (Inestable)"
-            ),
-            listOf(
-                "Jitter WAN máx. (Periodo)",
-                String.format(Locale.US, "%.1f ms", p.maxJitterMs),
-                "Informativo",
-                "Variabilidad máxima registrada"
-            ),
-            listOf(
-                "RSSI prom. en el periodo",
-                String.format(Locale.US, "%.1f dBm", p.rssiAvg),
-                if (p.rssiAvg > -127f) rssiToQuality(p.rssiAvg.toInt()) else "Sin Señal",
-                "Señal adecuada durante el periodo"
-            ),
-            listOf(
-                "RSSI mínimo en el periodo",
-                if (p.rssiMin > -127f) "${p.rssiMin.toInt()} dBm" else "Sin Señal",
-                if (p.rssiMin > -127f) rssiToQuality(p.rssiMin.toInt()) else "Sin Señal",
-                "Peor nivel registrado en la sesión"
-            ),
-            listOf(
-                "Varianza de señal RSSI",
-                String.format(Locale.US, "%.1f dBm^2", p.rssiVariance),
-                if (p.rssiVariance < 10f) "Estable" else if (p.rssiVariance < 30f) "Moderada" else "Fluctuante",
-                "Ref: < 10 (Estable) | > 30 (Fluctuante)"
-            ),
-            listOf(
-                "Velocidad Física del Enlace",
-                phyText,
-                "Informativo",
-                "Velocidad negociada AP-Dispositivo"
-            ),
-            listOf(
-                "Banda Wi-Fi Activa",
-                data.wifiBand,
-                "Informativo",
-                "2.4 GHz cob. | 5/6 GHz capacidad"
-            ),
-            listOf(
-                "Eventos de Roaming (Periodo)",
-                "${p.roamingEventsCount} roaming | ${p.ssidChangeCount} cambios",
-                if (p.roamingEventsCount == 0 && p.ssidChangeCount == 0) "Óptimo" else if (p.roamingEventsCount < 3) "Aceptable" else "Frecuente",
-                "Ref: 0 (Óptimo) | >= 5 (Crítico)"
-            )
-        )
-
-        rows.forEachIndexed { index, row ->
-            val bg = if (index % 2 == 0) tdBgPaintEven else tdBgPaintOdd
-            drawTableRow(canvas, MARGIN, currentY, colWidths, rowHeight, row, tableCellPaint, bg)
-            currentY += rowHeight
-        }
-
-        // Footnote aclaratoria de PHY Rate
-        val phyFootnotePaint = TextPaint().apply {
-            color = Color.parseColor("#64748B")
-            textSize = 6.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(
-            sanitizePdfText("[!] La velocidad física (PHY Rate) es negociada entre el dispositivo y el AP; no representa la velocidad real de Internet."),
-            MARGIN, currentY + 10f, phyFootnotePaint
-        )
-
-        currentY += 22f
-
-        // 4. Diagnóstico Técnico Detallado
-        canvas.drawText(sanitizePdfText("Diagnóstico Automático Basado en Reglas e IA"), MARGIN, currentY, secTitlePaint)
-        currentY += 8f
-
-        // Caja de Diagnóstico
-        val diagRect = RectF(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY + 120f)
-        val diagBg = Paint().apply { color = Color.parseColor("#F8FAFC") }
-        val diagBorder = Paint().apply {
-            color = Color.parseColor("#E2E8F0")
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        canvas.drawRoundRect(diagRect, 4f, 4f, diagBg)
-        canvas.drawRoundRect(diagRect, 4f, 4f, diagBorder)
-
-        // Diagnóstico Principal
-        val diagTitlePaint = TextPaint().apply {
-            color = Color.parseColor("#0F172A")
-            textSize = 9.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText("Resultado del Análisis: ${data.diagnosisTitle} (Confianza: ${data.confidence}%)"), MARGIN + 12f, currentY + 18f, diagTitlePaint)
-
-        // Evidencias evaluadas
-        var evidenceY = currentY + 30f
-        val evidencePaint = TextPaint().apply {
-            color = Color.parseColor("#475569")
-            textSize = 8.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-        
-        canvas.drawText(sanitizePdfText("Evidencias detectadas en la sesión:"), MARGIN + 12f, evidenceY, diagTitlePaint)
-        evidenceY += 10f
-        
-        data.evidences.take(3).forEach { ev ->
-            canvas.drawCircle(MARGIN + 18f, evidenceY - 3f, 2f, Paint().apply { color = Color.parseColor("#0284C7") })
-            canvas.drawText(sanitizePdfText(ev), MARGIN + 26f, evidenceY, evidencePaint)
-            evidenceY += 11f
-        }
-
-        // Recomendación técnica (Caja resaltada dentro del diagnóstico)
-        val recBoxRect = RectF(MARGIN + 12f, currentY + 80f, PAGE_WIDTH - MARGIN - 12f, currentY + 110f)
-        val recBoxBg = Paint().apply { color = Color.parseColor("#EFF6FF") } // Soft blue
-        val recBoxBorder = Paint().apply {
-            color = Color.parseColor("#BFDBFE")
-            style = Paint.Style.STROKE
-            strokeWidth = 0.5f
-        }
-        canvas.drawRoundRect(recBoxRect, 3f, 3f, recBoxBg)
-        canvas.drawRoundRect(recBoxRect, 3f, 3f, recBoxBorder)
-
-        val recPaint = TextPaint().apply {
-            color = Color.parseColor("#1E40AF") // Navy Blue
-            textSize = 8f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        drawTextWrapped(
-            canvas = canvas,
-            text = data.recommendation,
-            x = MARGIN + 20f,
-            y = currentY + 88f,
-            width = textWidth - 16f,
-            paint = recPaint
-        )
-
-        currentY += 138f
-
-        // 5. Observaciones Opcionales del Técnico
-        if (!data.technicianNotes.isNullOrBlank()) {
-            canvas.drawText(sanitizePdfText("Observaciones y Anotaciones de Campo"), MARGIN, currentY, secTitlePaint)
-            currentY += 8f
-
-            val noteRect = RectF(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY + 58f)
-            canvas.drawRoundRect(noteRect, 4f, 4f, Paint().apply { color = Color.parseColor("#FCFDFD") })
-            canvas.drawRoundRect(noteRect, 4f, 4f, diagBorder)
-
-            val notesPaint = TextPaint().apply {
-                color = Color.parseColor("#1E293B")
-                textSize = 8.5f
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
-                isAntiAlias = true
-            }.disableLigatures()
-            drawTextWrapped(
-                canvas = canvas,
-                text = data.technicianNotes,
-                x = MARGIN + 12f,
-                y = currentY + 12f,
-                width = textWidth,
-                paint = notesPaint
-            )
-        }
-
-        // Pie de Página 1
-        val footerPaint = TextPaint().apply {
-            color = Color.parseColor("#94A3B8")
-            textSize = 7.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(
-            sanitizePdfText("Reporte generado por Visor WiFi - El estado refleja el periodo analizado completo, no un instante puntual."),
-            MARGIN, PAGE_HEIGHT - 30f, footerPaint
-        )
-        canvas.drawText(sanitizePdfText("Página 1 de 2"), PAGE_WIDTH - MARGIN - 50f, PAGE_HEIGHT - 30f, footerPaint)
-    }
-
-    /**
-     * Dibuja los elementos de la segunda página del reporte.
-     */
-    private fun drawPage2(context: Context, canvas: Canvas, data: ReportData) {
-        var currentY = MARGIN
-
-        // Cabecera compacta
-        val titlePaint = TextPaint().apply {
-            color = Color.parseColor("#475569")
-            textSize = 10f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText("VISOR WIFI - EVIDENCIA GRAFICA Y EVENTOS DE RED"), MARGIN, currentY + 12f, titlePaint)
-        
-        val linePaint = Paint().apply {
-            color = Color.parseColor("#E2E8F0")
-            strokeWidth = 0.8f
-            style = Paint.Style.STROKE
-        }
-        canvas.drawLine(MARGIN, currentY + 18f, PAGE_WIDTH - MARGIN, currentY + 18f, linePaint)
-        currentY += 32f
-
-        // 1. Gráficas de Evidencia (Historial de Latencia y RSSI)
-        val secTitlePaint = TextPaint().apply {
-            color = Color.parseColor("#0F172A")
-            textSize = 11f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText("Historial Gráfico de Conexión (Últimos 10 Minutos)"), MARGIN, currentY, secTitlePaint)
-        currentY += 12f
-
-        // Dimensiones físicas de la gráfica a insertar en el PDF (505 x 145 píxeles)
-        val chartWidth = 505
-        val chartHeight = 145
-
-        // Generar y dibujar Gráfica de Latencia (LAN vs WAN)
-        try {
-            val latencyBitmap = generateChartBitmap(context, data.latencyHistory, isRssi = false, width = chartWidth, height = chartHeight)
-            canvas.drawBitmap(latencyBitmap, MARGIN, currentY, null)
-            
-            val graphLabelPaint = TextPaint().apply {
-                color = Color.parseColor("#475569")
-                textSize = 7.5f
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                isAntiAlias = true
-            }.disableLigatures()
-            canvas.drawText(sanitizePdfText("Fig A. Historial de Latencias LAN (Acceso Local) y WAN (Acceso a Internet)"), MARGIN + 4f, currentY + chartHeight + 10f, graphLabelPaint)
-            currentY += chartHeight + 22f
-        } catch (e: Exception) {
-            val errorPaint = TextPaint().apply { color = Color.RED; textSize = 9f }
-            canvas.drawText(sanitizePdfText("Error al renderizar gráfico de latencia: ${e.message}"), MARGIN, currentY + 20f, errorPaint)
-            currentY += 50f
-        }
-
-        // Generar y dibujar Gráfica de RSSI (Intensidad de Señal)
-        try {
-            val rssiBitmap = generateChartBitmap(context, data.latencyHistory, isRssi = true, width = chartWidth, height = chartHeight)
-            canvas.drawBitmap(rssiBitmap, MARGIN, currentY, null)
-            
-            val graphLabelPaint = TextPaint().apply {
-                color = Color.parseColor("#475569")
-                textSize = 7.5f
-                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                isAntiAlias = true
-            }.disableLigatures()
-            canvas.drawText(sanitizePdfText("Fig B. Historial de Intensidad de Señal Inalámbrica (RSSI en dBm)"), MARGIN + 4f, currentY + chartHeight + 10f, graphLabelPaint)
-            currentY += chartHeight + 26f
-        } catch (e: Exception) {
-            val errorPaint = TextPaint().apply { color = Color.RED; textSize = 9f }
-            canvas.drawText(sanitizePdfText("Error al renderizar gráfico de RSSI: ${e.message}"), MARGIN, currentY + 20f, errorPaint)
-            currentY += 50f
-        }
-
-        // 2. Registro de Eventos de Red (Roaming e Itinerancia)
-        canvas.drawText(sanitizePdfText("Registro de Eventos y Cambios de Red"), MARGIN, currentY, secTitlePaint)
-        currentY += 8f
-
-        val eventsBoxRect = RectF(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY + 98f)
-        val boxBg = Paint().apply { color = Color.parseColor("#FCFDFD") }
-        val boxBorder = Paint().apply {
-            color = Color.parseColor("#E2E8F0")
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        canvas.drawRoundRect(eventsBoxRect, 4f, 4f, boxBg)
-        canvas.drawRoundRect(eventsBoxRect, 4f, 4f, boxBorder)
-
-        val eventPaint = TextPaint().apply {
-            color = Color.parseColor("#334155")
-            textSize = 7.5f
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-
-        var eventY = currentY + 14f
-        if (data.networkEvents.isEmpty()) {
-            canvas.drawText(
-                sanitizePdfText("No se detectaron eventos significativos de red (roaming o cambio de SSID) durante el monitoreo."),
-                MARGIN + 12f, eventY,
-                TextPaint(eventPaint).apply { typeface = Typeface.DEFAULT }.disableLigatures()
-            )
-        } else {
-            // Mostrar últimos 7 eventos para no desbordar la caja
-            data.networkEvents.takeLast(7).forEach { event ->
-                canvas.drawText(sanitizePdfText(event), MARGIN + 12f, eventY, eventPaint)
-                eventY += 12f
-            }
-        }
-
-        currentY += 114f
-
-        // 3. Firmas
-        canvas.drawLine(MARGIN, currentY, PAGE_WIDTH - MARGIN, currentY, linePaint)
-        currentY += 16f
-
-        val sigTitlePaint = TextPaint().apply {
-            color = Color.parseColor("#334155")
-            textSize = 9f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            isAntiAlias = true
-        }.disableLigatures()
-        val sigLinePaint = Paint().apply {
-            color = Color.parseColor("#94A3B8")
-            strokeWidth = 1f
-        }
-
-        // Firma del Técnico (Izquierda)
-        val leftSigX = MARGIN + 40f
-        val sigWidth = 140f
-        canvas.drawLine(leftSigX, currentY + 50f, leftSigX + sigWidth, currentY + 50f, sigLinePaint)
-        canvas.drawText(sanitizePdfText("Firma del Técnico"), leftSigX + 26f, currentY + 62f, sigTitlePaint)
-        canvas.drawText(
-            sanitizePdfText("Nombre: ${data.technicianName}"),
-            leftSigX + 4f, currentY + 74f,
-            TextPaint(sigTitlePaint).apply { typeface = Typeface.DEFAULT; textSize = 8f }.disableLigatures()
-        )
-
-        // Dibujar el bitmap de la firma si existe
-        data.technicianSignature?.let { signatureBitmap ->
-            val destRect = RectF(leftSigX + 10f, currentY + 5f, leftSigX + sigWidth - 10f, currentY + 45f)
-            canvas.drawBitmap(signatureBitmap, null, destRect, null)
-        }
-
-        // Firma del Cliente / Sitio (Derecha)
-        val rightSigX = PAGE_WIDTH - MARGIN - sigWidth - 40f
-        canvas.drawLine(rightSigX, currentY + 50f, rightSigX + sigWidth, currentY + 50f, sigLinePaint)
-        canvas.drawText(sanitizePdfText("Firma del Cliente"), rightSigX + 28f, currentY + 62f, sigTitlePaint)
-        canvas.drawText(
-            sanitizePdfText("Sitio: ${data.siteName}"),
-            rightSigX + 4f, currentY + 74f,
-            TextPaint(sigTitlePaint).apply { typeface = Typeface.DEFAULT; textSize = 8f }.disableLigatures()
-        )
-
-        // Pie de Página 2
-        val footerPaint = TextPaint().apply {
-            color = Color.parseColor("#94A3B8")
-            textSize = 7.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-            isAntiAlias = true
-        }.disableLigatures()
-        canvas.drawText(sanitizePdfText("Visor WiFi - Evidencia de Red Confiable y Segura"), MARGIN, PAGE_HEIGHT - 30f, footerPaint)
-        canvas.drawText(sanitizePdfText("Página 2 de 2"), PAGE_WIDTH - MARGIN - 50f, PAGE_HEIGHT - 30f, footerPaint)
-    }
-
-
-    /**
-     * Dibuja una celda de tabla en el Canvas del PDF.
-     */
-    private fun drawTableRow(
-        canvas: Canvas,
-        x: Float,
-        y: Float,
-        colWidths: List<Float>,
-        rowHeight: Float,
-        values: List<String>,
-        textPaint: Paint,
-        bgPaint: Paint? = null
-    ) {
-        var currentX = x
-        
-        // Fondo
-        if (bgPaint != null) {
-            val totalWidth = colWidths.sum()
-            canvas.drawRect(x, y, x + totalWidth, y + rowHeight, bgPaint)
-        }
-        
-        // Bordes y textos
-        val borderPaint = Paint().apply {
-            color = Color.parseColor("#E2E8F0")
-            style = Paint.Style.STROKE
-            strokeWidth = 0.5f
-        }
-        
-        for (i in values.indices) {
-            val width = colWidths[i]
-            canvas.drawRect(currentX, y, currentX + width, y + rowHeight, borderPaint)
-            
-            // Centrado vertical básico — sanitizar el texto antes de medir/renderizar
-            val rawText = sanitizePdfText(values[i])
-            val textBounds = Rect()
-            textPaint.getTextBounds(rawText, 0, rawText.length, textBounds)
-            val textY = y + (rowHeight + textBounds.height()) / 2f - 1.5f
-            val textX = currentX + 6f // Margen interno de celda
-            
-            // Truncar texto si excede el ancho de columna
-            var safeText = rawText
-            val textLimitWidth = width - 12f
-            if (textPaint.measureText(rawText) > textLimitWidth) {
-                var len = rawText.length
-                while (len > 0 && textPaint.measureText(rawText.substring(0, len) + "...") > textLimitWidth) {
-                    len--
-                }
-                safeText = if (len > 0) rawText.substring(0, len) + "..." else ""
-            }
-            
-            canvas.drawText(safeText, textX, textY, textPaint)
-            currentX += width
+        val document = PdfDocument()
+        document.page(1) { executive(it, data) }; document.page(2) { metrics(it, data) }; document.page(3) { evidence(context, it, data) }
+        val folder = File(context.cacheDir, "reports").apply { if (!exists()) mkdirs() }
+        return File(folder, "reporte_visorwifi_${System.currentTimeMillis()}.pdf").also { file ->
+            FileOutputStream(file).use { document.writeTo(it) }; document.close()
         }
     }
+    private fun PdfDocument.page(n: Int, body: (Canvas) -> Unit) { val p = startPage(PdfDocument.PageInfo.Builder(W, H, n).create()); body(p.canvas); finishPage(p) }
 
-    /**
-     * Dibuja un texto que se auto-ajusta en múltiples renglones (Word Wrap) usando StaticLayout.
-     * Aplica [sanitizePdfText] internamente para garantizar compatibilidad de caracteres.
-     */
-    private fun drawTextWrapped(
-        canvas: Canvas,
-        text: String,
-        x: Float,
-        y: Float,
-        width: Float,
-        paint: TextPaint
-    ): Float {
-        val safeText = sanitizePdfText(text)
-        val staticLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            StaticLayout.Builder.obtain(safeText, 0, safeText.length, paint, width.toInt())
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setLineSpacing(0f, 1.15f)
-                .setIncludePad(false)
-                .build()
-        } else {
-            @Suppress("DEPRECATION")
-            StaticLayout(
-                safeText,
-                paint,
-                width.toInt(),
-                Layout.Alignment.ALIGN_NORMAL,
-                1.15f,
-                0f,
-                false
-            )
+    private fun executive(c: Canvas, d: ReportData) {
+        header(c, d, "REPORTE DE DIAGNÓSTICO DE RED")
+        var y = 112f; val p = d.periodAnalysis; val palette = palette(d.periodStatus)
+        card(c, M, y, CW, 104f, palette.third, palette.second)
+        t(c, "ESTADO GENERAL DEL PERIODO", M + 16, y + 21, 8f, palette.second, true)
+        t(c, palette.first, M + 16, y + 48, 18f, palette.second, true)
+        t(c, "Periodo: ${period(p)}", M + 16, y + 66, 8.5f, muted)
+        t(c, "Duración: ${duration(p)} · ${p.sampleCount} muestras", M + 16, y + 81, 8.5f, muted)
+        t(c, "${p.stabilityScore}/100", W - M - 77, y + 48, 21f, palette.second, true)
+        t(c, "SCORE DE ESTABILIDAD", W - M - 116, y + 64, 6.8f, muted, true); y += 128
+        section(c, "INDICADORES PRINCIPALES", y); y += 12
+        val gap = 10f; val cw = (CW - gap * 2) / 3
+        indicator(c, M, y, cw, "RED LOCAL", ms(d.lanLatencyAvgMs), lan(d.lanLatencyAvgMs))
+        indicator(c, M + cw + gap, y, cw, "INTERNET", ms(d.wanLatencyAvgMs), wan(d.wanLatencyAvgMs))
+        indicator(c, M + (cw + gap) * 2, y, cw, "CONEXIÓN WIFI", rssi(p.rssiAvg), quality(p.rssiAvg.toInt())); y += 76
+        card(c, M, y, CW, 28f, Color.parseColor("#F8FAFC"), border)
+        t(c, "Pérdida WAN: ${"%.1f".format(Locale.US, p.packetLossPercent)}%    ·    Jitter WAN: ${"%.1f".format(Locale.US, p.avgJitterMs)} ms    ·    Roaming: ${p.roamingEventsCount}", M + 12, y + 18, 8.5f, muted); y += 52
+        section(c, "DIAGNÓSTICO AUTOMÁTICO", y); y += 12
+        card(c, M, y, CW, 186f, Color.parseColor("#F8FAFC"), border)
+        t(c, d.diagnosisTitle, M + 14, y + 22, 11f, ink, true); t(c, "CONFIANZA ${d.confidence}%", W - M - 86, y + 22, 8f, cyan, true)
+        t(c, "EVIDENCIAS DETECTADAS", M + 14, y + 44, 7.5f, muted, true)
+        var ey = y + 60
+        if (d.evidences.isEmpty()) { t(c, "Sin evidencias adicionales registradas.", M + 14, ey, 8.5f, muted); ey += 16 } else d.evidences.forEach { e ->
+            c.drawCircle(M + 18, ey - 3, 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = cyan }); ey += wrap(c, e, M + 26, ey - 8, CW - 44, tp(8.5f, Color.parseColor("#334155"))) + 5
         }
-        
-        canvas.save()
-        canvas.translate(x, y)
-        staticLayout.draw(canvas)
-        canvas.restore()
-        
-        return staticLayout.height.toFloat()
+        val ry = maxOf(ey + 8, y + 112); card(c, M + 14, ry, CW - 28, 52f, Color.parseColor("#EAFBFD"), Color.parseColor("#9DE5EC"))
+        t(c, "RECOMENDACIÓN", M + 25, ry + 15, 7.5f, cyan, true); wrap(c, d.recommendation, M + 25, ry + 21, CW - 50, tp(8.5f, ink, true))
+        footer(c, 1)
     }
 
-    /**
-     * Convierte la frecuencia en una descripción legible de la banda WiFi.
-     */
-    private fun frequencyToBand(frequencyMHz: Int): String {
-        return when {
-            frequencyMHz in 2400..2500 -> "2.4 GHz"
-            frequencyMHz in 5150..5850 -> "5 GHz"
-            frequencyMHz >= 5945 -> "6 GHz"
-            else -> "Desconocida"
-        }
+    private fun metrics(c: Canvas, d: ReportData) {
+        header(c, d, "MÉTRICAS TÉCNICAS DETALLADAS"); var y = 114f; val p = d.periodAnalysis
+        y = group(c, "RED LOCAL (LAN)", y, listOf(
+            row("Latencia LAN promedio", ms(d.lanLatencyAvgMs), lan(d.lanLatencyAvgMs), "Referencia: < 15 ms óptimo; > 50 ms inestable."),
+            row("Pico LAN", ms(p.maxLanLatencyMs), spike(p.lanSpikeCount), "${p.lanSpikeCount} muestras por encima de 50 ms."))) + 18
+        y = group(c, "CONECTIVIDAD A INTERNET (WAN)", y, listOf(
+            row("Latencia WAN promedio", ms(d.wanLatencyAvgMs), wan(d.wanLatencyAvgMs), "Referencia: < 100 ms estable; > 200 ms crítico."),
+            row("Pico WAN", ms(p.maxWanLatencyMs), spike(p.latencySpikeCount), "${p.latencySpikeCount} muestras por encima de 200 ms."),
+            row("Pérdida ICMP WAN", "%.1f%%".format(Locale.US, p.packetLossPercent), loss(p.packetLossPercent), "Respuestas ICMP sin respuesta durante el periodo."),
+            row("Jitter WAN prom. / máx.", "%.1f / %.1f ms".format(Locale.US, p.avgJitterMs, p.maxJitterMs), jitter(p.avgJitterMs), "Variación entre respuestas WAN consecutivas."),
+            row("TCP complementario LAN", tcp(d.latencyHistory.map { it.lanTcpLatency }, d.latencyHistory.count { it.lanTcpTarget != null }), "Informativo", "TCP connect; destino: ${target(d.latencyHistory.map { it.lanTcpTarget })}"),
+            row("TCP complementario WAN", tcp(d.latencyHistory.map { it.wanTcpLatency }, d.latencyHistory.count { it.wanTcpTarget != null }), "Informativo", "TCP connect; destino: ${target(d.latencyHistory.map { it.wanTcpTarget })}"))) + 18
+        y = group(c, "CONEXIÓN WIFI", y, listOf(
+            row("RSSI promedio", rssi(p.rssiAvg), quality(p.rssiAvg.toInt()), "Nivel promedio de intensidad de señal."),
+            row("RSSI mínimo", rssi(p.rssiMin), quality(p.rssiMin.toInt()), "Peor nivel registrado durante la sesión."),
+            row("Varianza RSSI", "%.1f dBm^2".format(Locale.US, p.rssiVariance), variance(p.rssiVariance), "< 10 estable; > 30 fluctuante."),
+            row("Velocidad PHY", "${d.phyRateMbps} Mbps", "Informativo", "Velocidad negociada entre AP y dispositivo."),
+            row("Banda WiFi activa", d.wifiBand, "Informativo", "Banda detectada al generar el reporte."),
+            row("Eventos roaming / SSID", "${p.roamingEventsCount} / ${p.ssidChangeCount}", roaming(p.roamingEventsCount), "Eventos detectados durante el periodo."))) + 18
+        section(c, "NOTAS TÉCNICAS", y); y += 10
+        wrap(c, "Las latencias, el jitter y la pérdida corresponden a respuestas ICMP. Las sondas TCP connect se muestran de forma complementaria y no equivalen a RTT ICMP.", M, y, CW, tp(8f, muted, italic = true))
+        wrap(c, "La velocidad PHY es la velocidad negociada entre el AP y el dispositivo; no representa la velocidad real de Internet.", M, y + 31, CW, tp(8f, muted, italic = true)); footer(c, 2)
     }
 
-    /**
-     * Clasifica cualitativamente el RSSI.
-     */
-    private fun rssiToQuality(rssi: Int): String {
-        return when {
-            rssi >= -50 -> "Excelente"
-            rssi >= -60 -> "Muy Buena"
-            rssi >= -70 -> "Buena"
-            rssi >= -80 -> "Regular"
-            rssi > -127 -> "Débil"
-            else -> "Sin Señal"
-        }
+    private fun evidence(context: Context, c: Canvas, d: ReportData) {
+        header(c, d, "EVIDENCIA GRÁFICA Y CIERRE"); var y = 114f
+        section(c, "FIGURA A — HISTORIAL DE LATENCIAS", y); y = chart(c, graph(context, d.latencyHistory, false), y + 10)
+        t(c, "LAN en cyan y WAN en morado. Las escalas y la leyenda reflejan las muestras registradas.", M, y + 12, 8f, muted); y += 34
+        section(c, "FIGURA B — HISTORIAL DE INTENSIDAD DE SEÑAL WIFI", y); y = chart(c, graph(context, d.latencyHistory, true), y + 10)
+        t(c, "RSSI en dBm durante el periodo monitoreado.", M, y + 12, 8f, muted); y += 32
+        section(c, "REGISTRO DE EVENTOS Y CAMBIOS DE RED", y); y += 10; card(c, M, y, CW, 82f, Color.parseColor("#F8FAFC"), border)
+        if (d.networkEvents.isEmpty()) wrap(c, "No se detectaron eventos significativos de red durante el monitoreo.", M + 12, y + 15, CW - 24, tp(8.5f, muted))
+        else { var ey = y + 13; d.networkEvents.takeLast(5).forEach { ey += wrap(c, "• $it", M + 12, ey, CW - 24, tp(7.8f, Color.parseColor("#334155"))) + 3 } }
+        y += 100
+        if (!d.technicianNotes.isNullOrBlank()) { section(c, "OBSERVACIONES Y ANOTACIONES DE CAMPO", y); y += 10; card(c, M, y, CW, 60f, Color.parseColor("#F8FAFC"), border); wrap(c, d.technicianNotes, M + 12, y + 12, CW - 24, tp(8.3f, ink, italic = true)); y += 76 }
+        signatures(c, d, minOf(y, 680f)); footer(c, 3)
     }
 
-    /**
-     * Genera dinámicamente un Bitmap a partir de una instancia de LineChart en memoria.
-     */
-    private fun generateChartBitmap(
-        context: Context,
-        history: List<LatencyPoint>,
-        isRssi: Boolean,
-        width: Int,
-        height: Int
-    ): Bitmap {
-        val chart = LineChart(context)
-        chart.layoutParams = ViewGroup.LayoutParams(width, height)
-        
-        // Estilización de alta calidad orientada a impresión en PDF (Fondo blanco, cuadrícula tenue)
-        chart.description.isEnabled = false
-        chart.setTouchEnabled(false)
-        chart.setDrawGridBackground(false)
-        chart.setBackgroundColor(Color.WHITE)
-        chart.setNoDataText("Sin datos históricos para graficar")
-        chart.setNoDataTextColor(Color.GRAY)
-
-        // Leyenda
-        chart.legend.apply {
-            isEnabled = true
-            textColor = Color.parseColor("#334155")
-            textSize = 8f
-            form = Legend.LegendForm.LINE
-            horizontalAlignment = Legend.LegendHorizontalAlignment.LEFT
-            verticalAlignment = Legend.LegendVerticalAlignment.BOTTOM
-            orientation = Legend.LegendOrientation.HORIZONTAL
-            setDrawInside(false)
-        }
-
-        // Eje X
-        val xAxis = chart.xAxis
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.textColor = Color.parseColor("#475569")
-        xAxis.textSize = 7.5f
-        xAxis.gridColor = Color.parseColor("#E2E8F0")
-        xAxis.setDrawGridLines(true)
-        xAxis.valueFormatter = object : ValueFormatter() {
-            override fun getFormattedValue(value: Float): String = "${value.toInt()}s"
-        }
-
-        // Eje Y
-        val axisLeft = chart.axisLeft
-        axisLeft.textColor = Color.parseColor("#475569")
-        axisLeft.textSize = 7.5f
-        axisLeft.gridColor = Color.parseColor("#E2E8F0")
-        axisLeft.setDrawGridLines(true)
-        
-        if (isRssi) {
-            axisLeft.axisMinimum = -100f
-            axisLeft.axisMaximum = -30f
-            axisLeft.valueFormatter = object : ValueFormatter() {
-                override fun getFormattedValue(value: Float): String = "${value.toInt()} dBm"
-            }
-        } else {
-            axisLeft.axisMinimum = 0f
-            axisLeft.valueFormatter = object : ValueFormatter() {
-                override fun getFormattedValue(value: Float): String = "${value.toInt()} ms"
-            }
-        }
-
-        chart.axisRight.isEnabled = false
-
-        // Inyección de Datos
-        if (isRssi) {
-            val rssiEntries = ArrayList<Entry>()
-            history.forEachIndexed { index, point ->
-                if (point.rssi > -127) {
-                    rssiEntries.add(Entry(index.toFloat(), point.rssi.toFloat()))
-                }
-            }
-            if (rssiEntries.isNotEmpty()) {
-                val set = LineDataSet(rssiEntries, "Intensidad Señal (RSSI)").apply {
-                    color = Color.parseColor("#0284C7")
-                    lineWidth = 1.8f
-                    setDrawCircles(false)
-                    setDrawValues(false)
-                    setDrawFilled(true)
-                    fillColor = Color.parseColor("#0284C7")
-                    fillAlpha = 22
-                }
-                chart.data = LineData(set)
-            }
-        } else {
-            val lanEntries = ArrayList<Entry>()
-            val wanEntries = ArrayList<Entry>()
-            history.forEachIndexed { index, point ->
-                val x = index.toFloat()
-                if (point.lanLatency >= 0) lanEntries.add(Entry(x, point.lanLatency))
-                if (point.wanLatency >= 0) wanEntries.add(Entry(x, point.wanLatency))
-            }
-
-            if (lanEntries.isNotEmpty() || wanEntries.isNotEmpty()) {
-                val dataSets = ArrayList<LineDataSet>()
-                if (lanEntries.isNotEmpty()) {
-                    dataSets.add(LineDataSet(lanEntries, "LAN (Acceso Local)").apply {
-                        color = Color.parseColor("#0D9488") // Teal
-                        lineWidth = 1.8f
-                        setDrawCircles(false)
-                        setDrawValues(false)
-                        setDrawFilled(true)
-                        fillColor = Color.parseColor("#0D9488")
-                        fillAlpha = 15
-                    })
-                }
-                if (wanEntries.isNotEmpty()) {
-                    dataSets.add(LineDataSet(wanEntries, "WAN (Internet)").apply {
-                        color = Color.parseColor("#D946EF") // Magenta
-                        lineWidth = 1.8f
-                        setDrawCircles(false)
-                        setDrawValues(false)
-                        setDrawFilled(true)
-                        fillColor = Color.parseColor("#D946EF")
-                        fillAlpha = 15
-                    })
-                }
-                chart.data = LineData(dataSets.toList())
-            }
-        }
-
-        // Layout off-screen forzado
-        chart.measure(
-            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
-        )
-        chart.layout(0, 0, width, height)
-
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        chart.draw(canvas)
-
-        return bitmap
-    }
-
-    // ─── Helpers de Compatibilidad PDF ───────────────────────────────────────────
-
-    /**
-     * Sanitiza un texto para renderizado seguro en el Canvas de PdfDocument.
-     *
-     * El motor Skia PDF de Android no incluye glifos para todos los caracteres Unicode.
-     * Los más problemáticos son:
-     * - Ligaduras tipográficas latinas (ﬁ, ﬂ, ﬀ) → generan huecos en palabras como "Oficinas"
-     * - En-dash (–) y em-dash (—) → corrompen el texto circundante (ej: "11:50:57 – 11:56:11" → "115057")
-     * - Emojis y símbolos Unicode especiales (⚠️, 🔀, 📡, ≥, ≤, ✓) → glifos vacíos
-     * - Superíndices (²) → no renderizados en fuentes base del PDF
-     *
-     * Esta función transforma únicamente el texto durante el renderizado del PDF.
-     * Los datos originales del modelo [ReportData] permanecen intactos.
-     *
-     * @param text Texto original con posibles caracteres problemáticos.
-     * @return Texto seguro para renderizar en Canvas PDF.
-     */
-    internal fun sanitizePdfText(text: String): String {
-        return text
-            // ─── Ligaduras tipográficas latinas (U+FB00–U+FB06) ───────────────
-            // Estas ligaduras son la causa principal de "Conanza" (Confianza) y "Ocinas" (Oficinas).
-            // El glifo compuesto fi/fl no existe en las fuentes base del PdfDocument de Android.
-            .replace("\uFB00", "ff")   // ﬀ ligadura ff
-            .replace("\uFB01", "fi")   // ﬁ ligadura fi
-            .replace("\uFB02", "fl")   // ﬂ ligadura fl
-            .replace("\uFB03", "ffi")  // ﬃ ligadura ffi
-            .replace("\uFB04", "ffl")  // ﬄ ligadura ffl
-            .replace("\uFB05", "st")   // ﬅ ligadura st
-            .replace("\uFB06", "st")   // ﬆ ligadura st
-            // ─── Guiones tipográficos ─────────────────────────────────────────
-            // El en-dash (–) es la causa principal de "115057" al renderizar rangos horarios.
-            .replace("\u2013", "-")    // – en-dash → guion estándar
-            .replace("\u2014", "-")    // — em-dash → guion estándar
-            .replace("\u2012", "-")    // ‒ figure dash → guion
-            .replace("\u2015", "-")    // ― horizontal bar → guion
-            // ─── Símbolos matemáticos / comparación ──────────────────────────
-            .replace("\u2265", ">=")   // ≥ mayor o igual
-            .replace("\u2264", "<=")   // ≤ menor o igual
-            .replace("\u2248", "~")    // ≈ aproximado
-            .replace("\u00B2", "^2")   // ² superíndice cuadrado
-            .replace("\u00B3", "^3")   // ³ superíndice cúbico
-            // ─── Símbolos de estado → texto equivalente ───────────────────────
-            .replace("✓", "[OK]")
-            .replace("✗", "[X]")
-            .replace("✘", "[X]")
-            // ─── Emojis frecuentes en el sistema de eventos ───────────────────
-            // Los emojis del NetworkMonitorService (📡, 🔀) se procesan aquí para el PDF.
-            .replace("⚠️", "[!]")
-            .replace("⚠", "[!]")
-            .replace("🔀", "[roaming]")
-            .replace("📡", "[AP]")
-            .replace("📶", "[señal]")
-            .replace("🔴", "[rojo]")
-            .replace("🟢", "[verde]")
-            .replace("⚡", "[!]")
-            // ─── Flechas Unicode ──────────────────────────────────────────────
-            .replace("➔", "->")
-            .replace("→", "->")
-            .replace("←", "<-")
-            .replace("↔", "<->")
-            // ─── Comillas tipográficas ─────────────────────────────────────────
-            .replace("\u201C", "\"")   // " comilla doble izquierda
-            .replace("\u201D", "\"")   // " comilla doble derecha
-            .replace("\u2018", "'")    // ' comilla simple izquierda
-            .replace("\u2019", "'")    // ' comilla simple derecha
-            // ─── Separadores y espacios especiales ───────────────────────────
-            .replace("\u00B7", ".")    // · punto medio
-            .replace("\u2022", "-")    // • bullet → guion
-            .replace("\u2026", "...")  // … puntos suspensivos
-            .replace("\u00A0", " ")    // non-breaking space → espacio normal
-    }
-
-    /**
-     * Extensión que desactiva las ligaduras tipográficas en el motor de texto Skia.
-     *
-     * Aunque [sanitizePdfText] elimina ligaduras del texto fuente, el motor Skia puede
-     * reintroducirlas automáticamente durante el renderizado si las ligaduras están
-     * habilitadas en el stack tipográfico. Esta función las desactiva en el nivel de Paint,
-     * garantizando que `fi`, `fl`, `ff` se rendericen como caracteres independientes.
-     *
-     * Referencia: https://developer.android.com/reference/android/graphics/Paint#setFontFeatureSettings(java.lang.String)
-     */
-    private fun TextPaint.disableLigatures(): TextPaint {
-        fontFeatureSettings = "\"liga\" 0, \"clig\" 0, \"dlig\" 0"
-        return this
-    }
+    // Bitmap pixels are converted by aspect ratio into PDF points; they are never pasted 1:1.
+    private fun chart(c: Canvas, b: Bitmap, y: Float): Float { val h = minOf(CW * b.height / b.width, 156f); val w = h * b.width / b.height; val x = M + (CW - w) / 2; c.drawBitmap(b, null, RectF(x, y, x + w, y + h), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)); return y + h }
+    private fun header(c: Canvas, d: ReportData, subtitle: String) { t(c, "VISOR WIFI", M, 56f, 19f, ink, true); t(c, subtitle, M, 73f, 9.5f, cyan, true); val x = W - M - 168; t(c, datetime(d.dateTime), x, 45f, 8.3f, muted); t(c, "Técnico: ${d.technicianName}", x, 59f, 8.3f, muted); t(c, "Sitio: ${d.siteName}", x, 73f, 8.3f, muted); c.drawRect(M, 86f, W - M, 88f, Paint().apply { color = cyan }) }
+    private fun footer(c: Canvas, p: Int) { c.drawLine(M, FOOTER - 10, W - M, FOOTER - 10, Paint().apply { color = border }); t(c, "Reporte generado por Visor WiFi · El análisis refleja el periodo monitoreado.", M, FOOTER, 7.3f, muted); t(c, "Página $p de 3", W - M - 50, FOOTER, 7.3f, muted) }
+    private fun indicator(c: Canvas, x: Float, y: Float, w: Float, title: String, value: String, state: String) { card(c, x, y, w, 64f, Color.WHITE, border); t(c, title, x + 10, y + 16, 7f, muted, true); t(c, value, x + 10, y + 38, 13f, ink, true); t(c, state.uppercase(), x + 10, y + 53, 7.2f, color(state), true) }
+    private data class Row(val label: String, val value: String, val state: String, val note: String); private fun row(a: String,b: String,c: String,d: String)=Row(a,b,c,d)
+    private fun group(c: Canvas, title: String, start: Float, rows: List<Row>): Float { section(c, title, start); var y = start + 10; rows.forEachIndexed { i, r -> val rh = maxOf(31f, height(r.note, CW - 277, tp(7.6f, muted)) + 14); c.drawRect(M,y,W-M,y+rh,Paint().apply{color=if(i%2==0)Color.parseColor("#F8FAFC")else Color.WHITE}); c.drawRect(M,y,W-M,y+rh,Paint().apply{color=border;style=Paint.Style.STROKE;strokeWidth=.5f}); t(c,r.label,M+8,y+15,8f,ink,true);t(c,r.value,M+155,y+15,8f,ink,true);t(c,r.state,M+155,y+27,7f,color(r.state),true);wrap(c,r.note,M+260,y+8,CW-269,tp(7.6f,muted));y+=rh }; return y }
+    private fun signatures(c: Canvas, d: ReportData, y: Float) { val line=Paint().apply{color=Color.parseColor("#94A3B8")};val sw=165f;val l=M+35;val r=W-M-sw-35;c.drawLine(l,y+40,l+sw,y+40,line);c.drawLine(r,y+40,r+sw,y+40,line);d.technicianSignature?.let{c.drawBitmap(it,null,RectF(l+8,y,l+sw-8,y+36),null)};t(c,"Firma del Técnico",l+40,y+54,8f,ink,true);t(c,"Nombre: ${d.technicianName}",l,y+67,7.5f,muted);t(c,"Firma del Cliente",r+42,y+54,8f,ink,true);t(c,"Sitio: ${d.siteName}",r,y+67,7.5f,muted) }
+    private fun section(c:Canvas,s:String,y:Float)=t(c,s,M,y,10f,ink,true); private fun card(c:Canvas,x:Float,y:Float,w:Float,h:Float,bg:Int,stroke:Int){val r=RectF(x,y,x+w,y+h);c.drawRoundRect(r,4f,4f,Paint().apply{color=bg});c.drawRoundRect(r,4f,4f,Paint().apply{color=stroke;style=Paint.Style.STROKE;strokeWidth=.8f})}
+    private fun t(c:Canvas,s:String,x:Float,y:Float,size:Float,color:Int,bold:Boolean=false)=c.drawText(sanitizePdfText(s),x,y,tp(size,color,bold)); private fun tp(size:Float,color:Int,bold:Boolean=false,italic:Boolean=false)=TextPaint(Paint.ANTI_ALIAS_FLAG).apply{this.color=color;textSize=size;typeface=Typeface.create(Typeface.SANS_SERIF,if(bold)Typeface.BOLD else if(italic)Typeface.ITALIC else Typeface.NORMAL);fontFeatureSettings="\"liga\" 0, \"clig\" 0"}
+    private fun wrap(c:Canvas,s:String,x:Float,y:Float,w:Float,p:TextPaint):Float{val l=layout(s,w,p);c.save();c.translate(x,y);l.draw(c);c.restore();return l.height.toFloat()};private fun height(s:String,w:Float,p:TextPaint)=layout(s,w,p).height.toFloat();private fun layout(s:String,w:Float,p:TextPaint):StaticLayout{val safe=sanitizePdfText(s);return if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M)StaticLayout.Builder.obtain(safe,0,safe.length,p,w.toInt()).setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).setLineSpacing(0f,1.12f).build() else @Suppress("DEPRECATION") StaticLayout(safe,p,w.toInt(),Layout.Alignment.ALIGN_NORMAL,1.12f,0f,false)}
+    private fun palette(s:PeriodReportStatus)=when(s){PeriodReportStatus.OPTIMAL->Triple("ÓPTIMO",Color.parseColor("#15803D"),Color.parseColor("#F0FDF4"));PeriodReportStatus.DEGRADED->Triple("DEGRADADO",Color.parseColor("#B45309"),Color.parseColor("#FFFBEB"));PeriodReportStatus.UNSTABLE->Triple("INESTABLE",Color.parseColor("#C2410C"),Color.parseColor("#FFF7ED"));PeriodReportStatus.CRITICAL->Triple("CRÍTICO",Color.parseColor("#B91C1C"),Color.parseColor("#FEF2F2"))}
+    private fun color(s:String)=when(s.lowercase()){ "óptimo","excelente","muy buena","buena","estable"->Color.parseColor("#15803D");"degradado","aceptable","regular","moderada","informativo"->Color.parseColor("#B45309");"inestable","crítico","débil","frecuente","timeout","sin señal","fluctuante"->Color.parseColor("#B91C1C");else->muted }
+    private fun ms(v:Float)=if(v>=0)"%.1f ms".format(Locale.US,v)else "Timeout";private fun rssi(v:Float)=if(v>-127)"%.1f dBm".format(Locale.US,v)else "Sin señal"
+    private fun lan(v:Float)=when{v<0->"Timeout";v<15->"Óptimo";v<50->"Aceptable";else->"Inestable"};private fun wan(v:Float)=when{v<0->"Timeout";v<100->"Óptimo";v<150->"Degradado";v<200->"Inestable";else->"Crítico"};private fun spike(v:Int)=when{v==0->"Óptimo";v<5->"Degradado";v<10->"Inestable";else->"Crítico"};private fun loss(v:Float)=when{v<2->"Óptimo";v<5->"Degradado";v<10->"Inestable";else->"Crítico"};private fun jitter(v:Float)=when{v<15->"Óptimo";v<30->"Aceptable";else->"Inestable"};private fun variance(v:Float)=when{v<10->"Estable";v<30->"Moderada";else->"Fluctuante"};private fun roaming(v:Int)=when{v==0->"Óptimo";v<3->"Aceptable";else->"Frecuente"};private fun quality(v:Int)=when{v>=-50->"Excelente";v>=-60->"Muy buena";v>=-70->"Buena";v>=-80->"Regular";v>-127->"Débil";else->"Sin señal"}
+    private fun period(p:PeriodAnalysis):String{val f=SimpleDateFormat("HH:mm:ss",Locale.getDefault());return "${f.format(Date(p.periodStartMs))} - ${f.format(Date(p.periodEndMs))}"};private fun duration(p:PeriodAnalysis):String{val s=((p.periodEndMs-p.periodStartMs)/1000).coerceAtLeast(0);return if(s<60)"${s}s" else if(s<3600)"${s/60}m ${s%60}s" else "${s/3600}h ${(s%3600)/60}m"};private fun datetime(s:String)=s.replace(Regex("^(\\d{2}/\\d{2}/\\d{4})\\s+(\\d{1,2}:\\d{2})$"),"$1 · $2")
+    private fun tcp(v:List<Float>,n:Int):String{if(n==0)return "No utilizada";val ok=v.filter{it>=0};return if(ok.isEmpty())"Sin respuesta (0/$n)" else "%.1f ms (%d/%d)".format(Locale.US,ok.average(),ok.size,n)};private fun target(t:List<String?>)=t.lastOrNull{it!=null}?:"no disponible"
+    private fun graph(context:Context,h:List<LatencyPoint>,rssi:Boolean):Bitmap{val w=1400;val ht=430;val chart=LineChart(context).apply{layoutParams=ViewGroup.LayoutParams(w,ht);description.isEnabled=false;setTouchEnabled(false);setDrawGridBackground(false);setBackgroundColor(Color.WHITE);setNoDataText("Sin datos históricos para graficar");legend.apply{isEnabled=true;textColor=Color.parseColor("#334155");textSize=22f;form=Legend.LegendForm.LINE;horizontalAlignment=Legend.LegendHorizontalAlignment.LEFT;verticalAlignment=Legend.LegendVerticalAlignment.BOTTOM;orientation=Legend.LegendOrientation.HORIZONTAL;setDrawInside(false)};xAxis.apply{position=XAxis.XAxisPosition.BOTTOM;textColor=muted;textSize=20f;gridColor=border;setDrawGridLines(true);valueFormatter=object:ValueFormatter(){override fun getFormattedValue(v:Float)="${v.toInt()}s"}};axisLeft.apply{textColor=muted;textSize=20f;gridColor=border;setDrawGridLines(true);axisMinimum=if(rssi)-100f else 0f;if(rssi){axisMaximum=-30f;valueFormatter=object:ValueFormatter(){override fun getFormattedValue(v:Float)="${v.toInt()} dBm"}}else valueFormatter=object:ValueFormatter(){override fun getFormattedValue(v:Float)="${v.toInt()} ms"}};axisRight.isEnabled=false}
+        if(rssi){val e=h.mapIndexedNotNull{i,p->p.rssi.takeIf{it>-127}?.let{Entry(i.toFloat(),it.toFloat())}};if(e.isNotEmpty())chart.data=LineData(LineDataSet(e,"RSSI (dBm)").apply{color=cyan;lineWidth=5f;setDrawCircles(false);setDrawValues(false);setDrawFilled(true);fillColor=cyan;fillAlpha=24})}else{val l=h.mapIndexedNotNull{i,p->p.lanLatency.takeIf{it>=0}?.let{Entry(i.toFloat(),it)}};val n=h.mapIndexedNotNull{i,p->p.wanLatency.takeIf{it>=0}?.let{Entry(i.toFloat(),it)}};val sets=mutableListOf<ILineDataSet>();if(l.isNotEmpty())sets+=LineDataSet(l,"LAN (Acceso local)").apply{color=cyan;lineWidth=5f;setDrawCircles(false);setDrawValues(false)};if(n.isNotEmpty())sets+=LineDataSet(n,"WAN (Internet)").apply{color=purple;lineWidth=5f;setDrawCircles(false);setDrawValues(false)};if(sets.isNotEmpty())chart.data=LineData(sets)}
+        chart.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(ht,View.MeasureSpec.EXACTLY));chart.layout(0,0,w,ht);return Bitmap.createBitmap(w,ht,Bitmap.Config.ARGB_8888).also{chart.draw(Canvas(it))}}
+    internal fun sanitizePdfText(s:String)=s.replace("\uFB00","ff").replace("\uFB01","fi").replace("\uFB02","fl").replace("\uFB03","ffi").replace("\uFB04","ffl").replace("\u2013","-").replace("\u2014","-").replace("\u2265",">=").replace("\u2264","<=").replace("\u2248","~").replace("\u00B2","^2").replace("✓","[OK]").replace("✗","[X]").replace("⚠️","[!]").replace("⚠","[!]").replace("🔀","[roaming]").replace("📡","[AP]").replace("📶","[señal]").replace("➔","->").replace("→","->").replace("←","<-").replace("\u201C","\"").replace("\u201D","\"").replace("\u2018","'").replace("\u2019","'").replace("\u00B7",".").replace("\u2022","-").replace("\u2026","...").replace("\u00A0"," ")
 }
