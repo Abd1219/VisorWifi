@@ -115,8 +115,10 @@ Las sondas TCP se ejecutan como comprobación complementaria cuando ICMP falla. 
 2. **Métricas técnicas detalladas:** grupos independientes para LAN, WAN y WiFi; incluye picos, pérdida ICMP, jitter, TCP complementario, RSSI, PHY, banda y roaming, junto con sus referencias técnicas.
 3. **Evidencia gráfica y cierre:** historiales de latencia y RSSI, eventos registrados, observaciones de campo y firmas.
 
+La primera página añade una explicación contextual y una **Conclusión del monitoreo**. `ReportNarrativeGenerator` redacta ambas a partir de `PeriodAnalysis`, el estado del periodo y el diagnóstico ya calculado; no modifica umbrales, score, ni telemetría. En el caso específico de un periodo degradado únicamente por pocos picos WAN, aclara que la calificación incluye esos eventos aunque el comportamiento predominante haya sido estable.
+
 - **Integridad de datos:** los valores mostrados proceden de `PeriodAnalysis`, `NetworkDiagnosisEngine` y el historial existente. Las sondas TCP permanecen separadas de las estadísticas ICMP de latencia, jitter y pérdida.
-- **Escalado de gráficas:** MPAndroidChart se renderiza fuera de pantalla a `1400 × 430 px`. Al dibujarse en el PDF, los píxeles no se interpretan como puntos PDF: el destino se calcula a partir de la relación de aspecto, del ancho disponible y de una altura máxima segura. Así no se recortan ejes, leyendas ni márgenes.
+- **Escalado de gráficas:** MPAndroidChart se renderiza fuera de pantalla a `1400 × 430 px`. Al dibujarse en el PDF, los píxeles no se interpretan como puntos PDF: el destino se calcula a partir de la relación de aspecto, del ancho disponible y de una altura máxima segura. Las gráficas limitan las marcas de ejes, reducen la tipografía de ejes y leyenda, y mantienen visibles las unidades `ms` y `dBm` para aprovechar el área de datos en A4.
 - **Sanitización tipográfica (`sanitizePdfText`):** normaliza ligaduras latinas (`fi`, `fl`, `ff`), guiones tipográficos, símbolos matemáticos, flechas y emojis antes del trazado para evitar caracteres faltantes en Skia PDF. Los datos originales de `ReportData` no se alteran.
 - **Compatibilidad de pruebas:** los colores base del generador son valores ARGB directos, por lo que las pruebas JVM de sanitización pueden cargar el objeto sin requerir una implementación Android de `Color`.
 

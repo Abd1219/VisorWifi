@@ -27,8 +27,9 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
 *   **Generador Profesional de Reportes PDF**:
     *   Genera un reporte técnico de tres páginas: resumen ejecutivo y diagnóstico, métricas detalladas, y evidencia gráfica con eventos, observaciones y firmas.
     *   Conserva las métricas del periodo (LAN, WAN, pérdida ICMP, jitter, RSSI, PHY, banda, roaming y TCP complementario) sin modificar los cálculos de monitoreo ni el diagnóstico.
-    *   Las gráficas de latencia y RSSI se renderizan fuera de pantalla a alta resolución y se insertan proporcionalmente dentro del área útil A4, para conservar ejes, leyendas y márgenes al imprimir o compartir.
+    *   Las gráficas de latencia y RSSI se renderizan fuera de pantalla a alta resolución y se insertan proporcionalmente dentro del área útil A4. Usan etiquetas, marcas y leyendas compactas para priorizar los datos sin perder las unidades `ms` y `dBm`.
     *   **Sanitización de Glifos y Compatibilidad Tipográfica**: Normaliza ligaduras latinas (`fi`, `fl`, `ff`), en-dashes (`–`), caracteres matemáticos y emojis para evitar fallos de renderizado en el motor PDF Skia de Android.
+    *   **Interpretación para cliente**: Distingue el estado global del periodo del comportamiento predominante; contextualiza picos aislados y crea una conclusión clara sin alterar métricas ni diagnóstico.
 *   **Mecanismos de Resiliencia (Fallback)**:
     *   **Ping ICMP**: Intenta medir RTT con `/system/bin/ping`.
     *   **Sonda TCP complementaria**: Si falla ICMP, intenta establecer conexiones TCP en puertos seleccionados. La tarjeta y el PDF muestran ese tiempo por separado; no se mezcla con latencia, jitter ni pérdida ICMP. Un rechazo de conexión cuenta como respuesta del host y su tiempo se registra como tiempo de conexión TCP.

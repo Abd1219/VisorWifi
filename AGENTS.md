@@ -12,7 +12,7 @@ Este archivo sirve como referencia principal para asistentes de IA (Antigravity,
 - **UI Framework**: Jetpack Compose con Material 3 (Estilo **Neo-Brutalista** en Dark Mode: fondo `#0B0E14`, color primario `#00F0FF`, acento `#00FF66`).
 - **SDK**: `minSdk = 26`, `targetSdk = 36`, `compileSdk = 36`.
 - **Concurrencia**: Kotlin Coroutines (`Dispatchers.IO`, `SupervisorJob`) + `SharedFlow` / `StateFlow`.
-- **Gráficas**: MPAndroidChart (vía `AndroidView` en Compose) y Canvas nativo de Compose para componentes interactivos como `CompassView` y `RssiChart`.
+- **Gráficas**: MPAndroidChart (vía `AndroidView` en Compose) para latencia y RSSI; Canvas nativo de Compose para componentes interactivos como `CompassView`.
 
 ---
 
@@ -46,6 +46,9 @@ com.abdapps.visorwifi
 │   ├── NetworkMetrics.kt          # Métricas consolidadas para diagnóstico
 │   ├── DiagnosisState.kt          # Estado de diagnóstico para UI
 │   ├── ReportData.kt              # Datos estructurados para generación de PDF
+│   ├── PeriodAnalysis.kt           # Métricas agregadas del periodo para reporte
+│   ├── PeriodReportStatus.kt       # Estado global estadístico del periodo
+│   ├── ReportNarrativeGenerator.kt # Explicación y conclusión para cliente sin alterar métricas
 │   ├── PdfGenerator.kt            # Reporte PDF v2: 3 páginas, gráficas escaladas proporcionalmente y sanitización
 │   ├── WifiSnapshot.kt            # Captura desacoplada e instantánea del enlace Wi-Fi
 │   └── aplocator/                 # Modelos del módulo AP Locator

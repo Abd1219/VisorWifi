@@ -521,21 +521,9 @@ fun LatencyMonitorScreen(
                         wanValidSamples = historyList.count { it.wanLatency >= 0f }
                     )
 
-                    // ── 4. Conclusión ejecutiva basada en el análisis del periodo ───────────
-                    // Usa el reportDiagnosis (del periodo completo) para la recomendación,
-                    // y el estado del informe proviene exclusivamente de periodStatus.
-                    val periodStatusLabel = when (periodStatus) {
-                        com.abdapps.visorwifi.model.PeriodReportStatus.OPTIMAL   -> "óptimas"
-                        com.abdapps.visorwifi.model.PeriodReportStatus.DEGRADED  -> "degradadas"
-                        com.abdapps.visorwifi.model.PeriodReportStatus.UNSTABLE  -> "inestables"
-                        com.abdapps.visorwifi.model.PeriodReportStatus.CRITICAL  -> "críticas"
-                    }
-                    val executiveConclusion = buildString {
-                        append("Durante el periodo analizado (${ periodAnalysis.sampleCount } muestras), ")
-                        append("la red presentó condiciones $periodStatusLabel. ")
-                        append("Score de estabilidad: ${ periodAnalysis.stabilityScore }/100. ")
-                        append(reportDiagnosis.recommendation)
-                    }
+                    // ── 4. Conclusión ejecutiva basada únicamente en métricas ya calculadas ─
+                    val executiveConclusion = com.abdapps.visorwifi.model.ReportNarrativeGenerator
+                        .executiveConclusion(periodAnalysis, periodStatus)
 
                     // ── 5. Construcción de ReportData ───────────────────────────────────────
                     // periodStatus y periodAnalysis son la fuente de verdad del PDF.
