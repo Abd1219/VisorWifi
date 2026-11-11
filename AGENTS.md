@@ -46,7 +46,7 @@ com.abdapps.visorwifi
 │   ├── NetworkMetrics.kt          # Métricas consolidadas para diagnóstico
 │   ├── DiagnosisState.kt          # Estado de diagnóstico para UI
 │   ├── ReportData.kt              # Datos estructurados para generación de PDF
-│   ├── PdfGenerator.kt            # Generador nativo de archivos PDF con sanitización de glifos
+│   ├── PdfGenerator.kt            # Reporte PDF v2: 3 páginas, gráficas escaladas proporcionalmente y sanitización
 │   ├── WifiSnapshot.kt            # Captura desacoplada e instantánea del enlace Wi-Fi
 │   └── aplocator/                 # Modelos del módulo AP Locator
 │       ├── RssiOrientationSample.kt# Muestra atómica (azimut, RSSI, timestamp, BSSID, freq)
@@ -99,6 +99,11 @@ com.abdapps.visorwifi
 - El monitor y los reportes usan `NetworkDiagnosisEngine`. El código bajo `engine/ia` contiene un prototipo heurístico, pero no está conectado al flujo actual.
 - La implementación de IA real es trabajo futuro. Actualizar la documentación si cambia este estado.
 - `LatencyPoint.lanLatency` y `wanLatency` representan ICMP. Los tiempos y destinos TCP complementarios van en campos separados y no se deben mezclar con promedios, jitter o pérdida ICMP.
+
+### 2.1 Reporte PDF v2
+- `PdfGenerator` es únicamente una capa de presentación; recibe `ReportData` consolidado y no debe recalcular métricas ni alterar diagnóstico.
+- El reporte tiene tres páginas: resumen/diagnóstico, métricas agrupadas y evidencia/cierre.
+- Las gráficas se crean como bitmaps off-screen de alta resolución y se insertan preservando su relación de aspecto dentro del área segura A4. Nunca usar dimensiones de píxel como puntos PDF ni recortar ejes o leyendas.
 
 ### 3. No Romper APIs Deprecadas de Compatibilidad
 - `WifiManager.connectionInfo` y `ScanResult.SSID` están anotados con `@Suppress("DEPRECATION")` intencionalmente para mantener compatibilidad desde `minSdk 26`. NO refactorizar ni eliminar estas llamadas a menos que sea explícitamente solicitado.

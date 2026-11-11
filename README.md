@@ -25,7 +25,9 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   **Historial de Puntos de Medición**: Registra las estimaciones por posición física durante la sesión para comparación en campo.
 *   **Diagnóstico heurístico de red**: El monitor y los reportes usan reglas deterministas basadas en latencia ICMP, RSSI, jitter y pérdida. No hay IA implementada ni conectada al flujo actual. Bajo `engine/ia` se conserva un prototipo de puntuación heurística no utilizado; una IA real queda como trabajo futuro.
 *   **Generador Profesional de Reportes PDF**:
-    *   Genera reportes periciales completos de auditoría con estadísticas por periodos, gráficas incrustadas de latencia/RSSI y diagnóstico técnico.
+    *   Genera un reporte técnico de tres páginas: resumen ejecutivo y diagnóstico, métricas detalladas, y evidencia gráfica con eventos, observaciones y firmas.
+    *   Conserva las métricas del periodo (LAN, WAN, pérdida ICMP, jitter, RSSI, PHY, banda, roaming y TCP complementario) sin modificar los cálculos de monitoreo ni el diagnóstico.
+    *   Las gráficas de latencia y RSSI se renderizan fuera de pantalla a alta resolución y se insertan proporcionalmente dentro del área útil A4, para conservar ejes, leyendas y márgenes al imprimir o compartir.
     *   **Sanitización de Glifos y Compatibilidad Tipográfica**: Normaliza ligaduras latinas (`fi`, `fl`, `ff`), en-dashes (`–`), caracteres matemáticos y emojis para evitar fallos de renderizado en el motor PDF Skia de Android.
 *   **Mecanismos de Resiliencia (Fallback)**:
     *   **Ping ICMP**: Intenta medir RTT con `/system/bin/ping`.
@@ -66,7 +68,7 @@ El código fuente está completamente documentado y comentado en español bajo e
 *   **Modelo de Datos**:
     *   [LatencyPoint.kt](app/src/main/java/com/abdapps/visorwifi/model/LatencyPoint.kt): Almacena la telemetría recolectada por segundo (LAN, WAN, RSSI, BSSID, SSID, PHY Speeds).
     *   [WifiSnapshot.kt](app/src/main/java/com/abdapps/visorwifi/model/WifiSnapshot.kt): Snapshot desacoplado del adaptador Wi-Fi.
-    *   [PdfGenerator.kt](app/src/main/java/com/abdapps/visorwifi/model/PdfGenerator.kt): Motor de renderizado y sanitización de reportes PDF.
+    *   [PdfGenerator.kt](app/src/main/java/com/abdapps/visorwifi/model/PdfGenerator.kt): Motor de renderizado, escalado proporcional de gráficas y sanitización del reporte PDF v2.
     *   [Modelos AP Locator](app/src/main/java/com/abdapps/visorwifi/model/aplocator/): Modelos inmutables (`RssiOrientationSample`, `DirectionEstimate`, `MeasurementPoint`, `ApInfo`, `ApLocatorSession`).
 *   **Servicio & Proveedores de Datos**:
     *   [NetworkMonitorService.kt](app/src/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Monitoreo a 1Hz, fallbacks TCP, búfer circular e historial de roaming.

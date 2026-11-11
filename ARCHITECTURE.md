@@ -109,11 +109,16 @@ Las sondas TCP se ejecutan como comprobación complementaria cuando ICMP falla. 
 
 ## 5. Motor de Generación de Reportes PDF (`PdfGenerator`)
 
-El módulo `PdfGenerator` renderiza reportes ejecutivos vectoriales de 2 páginas con gráficos embebidos, tablas de métricas y diagnóstico pericial:
+`PdfGenerator` es una capa de presentación: recibe un `ReportData` ya consolidado y no recalcula telemetría, score de estabilidad ni diagnóstico. Genera un documento A4 de tres páginas:
 
-- **Sanitización de Glifos y Ligaduras (`sanitizePdfText`)**: El motor Skia PDF de Android carece de glifos para ciertas ligaduras latinas (`fi`, `fl`, `ff`), en-dashes (`–`), superíndices y emojis, lo cual provocaba corrupción tipográfica ("Conanza", "Ocinas", concatenación de timestamps). La sanitización convierte caracteres especiales a representaciones ASCII/Unicode compatibles antes del trazado.
-- **Desactivación de Ligaduras en Paint (`disableLigatures`)**: Configura `fontFeatureSettings = "\"liga\" 0, \"clig\" 0, \"dlig\" 0"` en `TextPaint` para prevenir la fusión automática de caracteres en el renderizado.
-- **Generación Vectorial y Rasterizado Dinámico**: Los gráficos de latencia y RSSI se convierten en bitmaps de alta resolución para incrustarse nítidamente en el documento PDF de 72 DPI estándar A4.
+1. **Resumen ejecutivo y diagnóstico:** estado del periodo, duración, muestras, score, indicadores LAN/WAN/WiFi, evidencias y recomendación del motor heurístico.
+2. **Métricas técnicas detalladas:** grupos independientes para LAN, WAN y WiFi; incluye picos, pérdida ICMP, jitter, TCP complementario, RSSI, PHY, banda y roaming, junto con sus referencias técnicas.
+3. **Evidencia gráfica y cierre:** historiales de latencia y RSSI, eventos registrados, observaciones de campo y firmas.
+
+- **Integridad de datos:** los valores mostrados proceden de `PeriodAnalysis`, `NetworkDiagnosisEngine` y el historial existente. Las sondas TCP permanecen separadas de las estadísticas ICMP de latencia, jitter y pérdida.
+- **Escalado de gráficas:** MPAndroidChart se renderiza fuera de pantalla a `1400 × 430 px`. Al dibujarse en el PDF, los píxeles no se interpretan como puntos PDF: el destino se calcula a partir de la relación de aspecto, del ancho disponible y de una altura máxima segura. Así no se recortan ejes, leyendas ni márgenes.
+- **Sanitización tipográfica (`sanitizePdfText`):** normaliza ligaduras latinas (`fi`, `fl`, `ff`), guiones tipográficos, símbolos matemáticos, flechas y emojis antes del trazado para evitar caracteres faltantes en Skia PDF. Los datos originales de `ReportData` no se alteran.
+- **Compatibilidad de pruebas:** los colores base del generador son valores ARGB directos, por lo que las pruebas JVM de sanitización pueden cargar el objeto sin requerir una implementación Android de `Color`.
 
 ---
 
