@@ -9,6 +9,7 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
 ## 🚀 Características Principales
 
 *   **Monitoreo en Segundo Plano Continuo**: Funciona mediante un servicio en primer plano (**Foreground Service**) con una notificación persistente e interactiva. Los datos se siguen registrando de forma ininterrumpida incluso si sales de la aplicación o apagas la pantalla.
+*   **Control de monitoreo adaptable**: La tarjeta de estado prioriza el espacio del botón **MONITOREAR**/**DETENER**, conserva una altura táctil mínima y evita que la etiqueta se divida en varias líneas.
 *   **Medición Concurrente de Latencia (LAN & WAN)**:
     *   **LAN (Acceso Local)**: Mide el tiempo de respuesta (RTT) hacia la puerta de enlace (Gateway) del router de forma periódica cada segundo.
     *   **WAN (Internet)**: Mide el tiempo de respuesta hacia los servidores DNS públicos primarios (DNS de Google `8.8.8.8` y Cloudflare `1.1.1.1`).
@@ -83,7 +84,7 @@ El código fuente está completamente documentado y comentado en español bajo e
 *   **Interfaz de Usuario (UI)**:
     *   [MainActivity.kt](app/src/main/java/com/abdapps/visorwifi/MainActivity.kt): Actividad principal con navegación Compose.
     *   [ModeSwitcher.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/ModeSwitcher.kt): Selector visual superior entre Monitor y AP Locator.
-    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal de monitoreo en tiempo real.
+    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal de monitoreo en tiempo real, con control de inicio/parada legible aun con espacio horizontal reducido.
     *   [ApLocatorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/ApLocatorScreen.kt): Pantalla declarativa completa del módulo AP Locator (3 estados).
     *   [CompassView.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/aplocator/CompassView.kt): Brújula nativa interactiva en Canvas Compose.
 

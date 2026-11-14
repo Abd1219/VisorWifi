@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -283,7 +287,9 @@ fun LatencyMonitorScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            // Al ponderar esta columna, el botón se mide primero y conserva el
+            // ancho necesario para que su etiqueta no termine partida en líneas.
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "ESTADO DEL SERVICIO",
                     fontSize = 10.sp,
@@ -322,31 +328,36 @@ fun LatencyMonitorScreen(
             }
 
             // Botón interactivo de monitoreo
-        Button(
-            onClick = {
-                if (isServiceRunning) {
-                    onStopService()
-                    historyList = emptyList()
-                    Log.d("LatencyMonitor", "Service stopped, history cleared")
-                } else {
-                    startWithPermissions()
-                }
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isServiceRunning) Color(0xFFFF3366)
-                                 else Color(0xFF00F0FF),
-                contentColor = if (isServiceRunning) Color.White else Color.Black
-            ),
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-        ) {
-            Text(
-                text = if (isServiceRunning) "DETENER" else "MONITOREAR",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                letterSpacing = 0.5.sp
-            )
-        }
+            Spacer(modifier = Modifier.width(12.dp))
+            Button(
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                onClick = {
+                    if (isServiceRunning) {
+                        onStopService()
+                        historyList = emptyList()
+                        Log.d("LatencyMonitor", "Service stopped, history cleared")
+                    } else {
+                        startWithPermissions()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isServiceRunning) Color(0xFFFF3366)
+                                     else Color(0xFF00F0FF),
+                    contentColor = if (isServiceRunning) Color.White else Color.Black
+                ),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = if (isServiceRunning) "DETENER" else "MONITOREAR",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         // ── Resultado principal: primero explica qué ocurre ────────────────

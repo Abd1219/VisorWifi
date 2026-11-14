@@ -57,6 +57,9 @@ Cuando el usuario entra directamente a la pantalla de **AP Locator** sin tener i
 - Registra muestras atómicas `RssiOrientationSample` durante la calibración 360°.
 - La captura compara el BSSID conectado con el BSSID seleccionado y detiene la medición si difieren. En la práctica, la estimación requiere estar conectado al AP seleccionado.
 
+### 2.3 Control de inicio y parada del monitor
+`LatencyMonitorScreen` presenta el estado del servicio junto al botón **MONITOREAR** o **DETENER**. La columna informativa usa el espacio flexible de la fila para que el botón se mida con el ancho de su etiqueta, mantenga una altura mínima de 48 dp y no divida el texto en varias líneas. Si el ancho disponible fuera excepcionalmente insuficiente, la etiqueta se limita a una línea con truncado en lugar de aumentar desproporcionadamente la altura de la tarjeta.
+
 ---
 
 ## 3. Módulo AP Locator (Procesamiento de Señal y Orientación)
