@@ -25,11 +25,11 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   **Historial de Puntos de Medición**: Registra las estimaciones por posición física durante la sesión para comparación en campo.
 *   **Diagnóstico heurístico de red**: El monitor y los reportes usan reglas deterministas basadas en latencia ICMP, RSSI, jitter y pérdida. No hay IA implementada ni conectada al flujo actual. Bajo `engine/ia` se conserva un prototipo de puntuación heurística no utilizado; una IA real queda como trabajo futuro.
 *   **Generador Profesional de Reportes PDF**:
-    *   Genera un reporte técnico de tres páginas: resumen ejecutivo y diagnóstico, métricas detalladas, y evidencia gráfica con eventos, observaciones y firmas.
+    *   Genera un reporte técnico V5 de tres páginas: resumen ejecutivo y diagnóstico, métricas detalladas, y evidencia gráfica con eventos, observaciones y firmas.
     *   Conserva las métricas del periodo (LAN, WAN, pérdida ICMP, jitter, RSSI, PHY, banda, roaming y TCP complementario) sin modificar los cálculos de monitoreo ni el diagnóstico.
-    *   Las gráficas de latencia y RSSI se renderizan fuera de pantalla a alta resolución y se insertan proporcionalmente dentro del área útil A4. Usan etiquetas, marcas y leyendas compactas para priorizar los datos sin perder las unidades `ms` y `dBm`.
+    *   Las gráficas de latencia y RSSI se renderizan fuera de pantalla a alta resolución y se insertan proporcionalmente dentro del área útil A4. Identifican picos LAN/WAN y el peor RSSI real; RSSI incluye referencias visuales de los umbrales existentes sin alterar las muestras ni su escala.
     *   **Sanitización de Glifos y Compatibilidad Tipográfica**: Normaliza ligaduras latinas (`fi`, `fl`, `ff`), en-dashes (`–`), caracteres matemáticos y emojis para evitar fallos de renderizado en el motor PDF Skia de Android.
-    *   **Interpretación para cliente**: Distingue el estado global del periodo del comportamiento predominante; contextualiza picos aislados y crea una conclusión clara sin alterar métricas ni diagnóstico.
+    *   **Interpretación para cliente**: Distingue el estado global del periodo del comportamiento predominante; contextualiza picos aislados, presenta recomendaciones según pérdida ICMP, latencia o cobertura reales, y crea una conclusión clara sin alterar métricas ni diagnóstico.
 *   **Mecanismos de Resiliencia (Fallback)**:
     *   **Ping ICMP**: Intenta medir RTT con `/system/bin/ping`.
     *   **Sonda TCP complementaria**: Si falla ICMP, intenta establecer conexiones TCP en puertos seleccionados. La tarjeta y el PDF muestran ese tiempo por separado; no se mezcla con latencia, jitter ni pérdida ICMP. Un rechazo de conexión cuenta como respuesta del host y su tiempo se registra como tiempo de conexión TCP.
@@ -69,7 +69,7 @@ El código fuente está completamente documentado y comentado en español bajo e
 *   **Modelo de Datos**:
     *   [LatencyPoint.kt](app/src/main/java/com/abdapps/visorwifi/model/LatencyPoint.kt): Almacena la telemetría recolectada por segundo (LAN, WAN, RSSI, BSSID, SSID, PHY Speeds).
     *   [WifiSnapshot.kt](app/src/main/java/com/abdapps/visorwifi/model/WifiSnapshot.kt): Snapshot desacoplado del adaptador Wi-Fi.
-    *   [PdfGenerator.kt](app/src/main/java/com/abdapps/visorwifi/model/PdfGenerator.kt): Motor de renderizado, escalado proporcional de gráficas y sanitización del reporte PDF v2.
+    *   [PdfGenerator.kt](app/src/main/java/com/abdapps/visorwifi/model/PdfGenerator.kt): Motor de renderizado del reporte PDF V5, con escalado proporcional de gráficas, anotaciones basadas en muestras reales y sanitización tipográfica.
     *   [Modelos AP Locator](app/src/main/java/com/abdapps/visorwifi/model/aplocator/): Modelos inmutables (`RssiOrientationSample`, `DirectionEstimate`, `MeasurementPoint`, `ApInfo`, `ApLocatorSession`).
 *   **Servicio & Proveedores de Datos**:
     *   [NetworkMonitorService.kt](app/src/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Monitoreo a 1Hz, fallbacks TCP, búfer circular e historial de roaming.

@@ -19,12 +19,12 @@ object ReportNarrativeGenerator {
                 "su calificación."
         }
 
+        val findings = clientFindings(analysis)
         return when (status) {
-            PeriodReportStatus.OPTIMAL -> "Las métricas del periodo se mantuvieron dentro de los rangos esperados."
-            PeriodReportStatus.DEGRADED -> "Se registraron condiciones que redujeron la calificación del periodo; " +
-                "el detalle de métricas indica cuáles estuvieron presentes."
-            PeriodReportStatus.UNSTABLE -> "Durante el periodo se registraron variaciones relevantes que requieren seguimiento."
-            PeriodReportStatus.CRITICAL -> "Durante el periodo se registraron condiciones críticas que requieren atención prioritaria."
+            PeriodReportStatus.OPTIMAL -> "Durante el periodo monitoreado, la conexión mantuvo un comportamiento estable. $findings"
+            PeriodReportStatus.DEGRADED -> "Durante el periodo monitoreado se identificaron condiciones puntuales que redujeron la calificación general. $findings"
+            PeriodReportStatus.UNSTABLE -> "Durante el periodo monitoreado se registraron variaciones relevantes que requieren seguimiento. $findings"
+            PeriodReportStatus.CRITICAL -> "Durante el periodo monitoreado se registraron condiciones críticas que requieren atención prioritaria. $findings"
         }
     }
 
@@ -63,6 +63,23 @@ object ReportNarrativeGenerator {
             analysis.roamingEventsCount == 0 &&
             analysis.stabilityScore >= 60 &&
             analysis.latencySpikeCount in 2..4
+
+    /** Only describes facts directly represented by the consolidated period metrics. */
+    private fun clientFindings(analysis: PeriodAnalysis): String {
+        val facts = mutableListOf<String>()
+        if (analysis.packetLossPercent == 0f) facts += "No se detectaron pérdidas de paquetes ICMP."
+        else facts += "La pérdida ICMP registrada fue de ${"%.1f".format(java.util.Locale.US, analysis.packetLossPercent)}%."
+
+        when {
+            analysis.avgWanLatencyMs >= 200f -> facts += "La latencia promedio hacia Internet fue crítica (${analysis.avgWanLatencyMs.toInt()} ms)."
+            analysis.avgWanLatencyMs >= 100f -> facts += "La latencia promedio hacia Internet requirió atención (${analysis.avgWanLatencyMs.toInt()} ms)."
+        }
+        if (analysis.rssiAvg > -127f && analysis.rssiAvg < -70f) {
+            facts += "La intensidad promedio de señal WiFi fue de ${analysis.rssiAvg.toInt()} dBm."
+        }
+        if (analysis.roamingEventsCount > 0) facts += "Se detectaron ${analysis.roamingEventsCount} eventos de roaming."
+        return facts.joinToString(" ")
+    }
 
     private fun statusLabel(status: PeriodReportStatus): String = when (status) {
         PeriodReportStatus.OPTIMAL -> "óptimas"

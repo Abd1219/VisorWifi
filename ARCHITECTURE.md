@@ -107,18 +107,18 @@ Las sondas TCP se ejecutan como comprobación complementaria cuando ICMP falla. 
 
 ---
 
-## 5. Motor de Generación de Reportes PDF (`PdfGenerator`)
+## 5. Motor de Generación de Reportes PDF V5 (`PdfGenerator`)
 
 `PdfGenerator` es una capa de presentación: recibe un `ReportData` ya consolidado y no recalcula telemetría, score de estabilidad ni diagnóstico. Genera un documento A4 de tres páginas:
 
-1. **Resumen ejecutivo y diagnóstico:** estado del periodo, duración, muestras, score, indicadores LAN/WAN/WiFi, evidencias y recomendación del motor heurístico.
+1. **Resumen ejecutivo y diagnóstico:** estado del periodo, duración, muestras, score, indicadores LAN/WAN/WiFi, evidencias, recomendación contextual y conclusión para cliente.
 2. **Métricas técnicas detalladas:** grupos independientes para LAN, WAN y WiFi; incluye picos, pérdida ICMP, jitter, TCP complementario, RSSI, PHY, banda y roaming, junto con sus referencias técnicas.
 3. **Evidencia gráfica y cierre:** historiales de latencia y RSSI, eventos registrados, observaciones de campo y firmas.
 
-La primera página añade una explicación contextual y una **Conclusión del monitoreo**. `ReportNarrativeGenerator` redacta ambas a partir de `PeriodAnalysis`, el estado del periodo y el diagnóstico ya calculado; no modifica umbrales, score, ni telemetría. En el caso específico de un periodo degradado únicamente por pocos picos WAN, aclara que la calificación incluye esos eventos aunque el comportamiento predominante haya sido estable.
+La primera página añade una explicación contextual y una **Conclusión del monitoreo**. `ReportNarrativeGenerator` redacta ambas a partir de `PeriodAnalysis`, el estado del periodo y el diagnóstico ya calculado; no modifica umbrales, score, ni telemetría. Las recomendaciones se seleccionan sólo cuando los datos del periodo respaldan pérdida ICMP, latencia WAN elevada o una señal WiFi débil; sin incidencias, se conserva la recomendación de monitoreo periódico. En el caso específico de un periodo degradado únicamente por pocos picos WAN, aclara que la calificación incluye esos eventos aunque el comportamiento predominante haya sido estable.
 
 - **Integridad de datos:** los valores mostrados proceden de `PeriodAnalysis`, `NetworkDiagnosisEngine` y el historial existente. Las sondas TCP permanecen separadas de las estadísticas ICMP de latencia, jitter y pérdida.
-- **Escalado de gráficas:** MPAndroidChart se renderiza fuera de pantalla a `1400 × 430 px`. Al dibujarse en el PDF, los píxeles no se interpretan como puntos PDF: el destino se calcula a partir de la relación de aspecto, del ancho disponible y de una altura máxima segura. Las gráficas limitan las marcas de ejes, reducen la tipografía de ejes y leyenda, y mantienen visibles las unidades `ms` y `dBm` para aprovechar el área de datos en A4.
+- **Escalado y evidencia de gráficas:** MPAndroidChart se renderiza fuera de pantalla a `1400 × 430 px`. Al dibujarse en el PDF, los píxeles no se interpretan como puntos PDF: el destino se calcula a partir de la relación de aspecto, del ancho disponible y de una altura máxima segura. La gráfica de latencia usa tiempo relativo a los timestamps originales y señala sus picos LAN/WAN; la de RSSI señala el peor RSSI válido y dibuja referencias para Excelente, Buena y Débil según los criterios existentes. Las anotaciones no agregan datos ni modifican las escalas.
 - **Sanitización tipográfica (`sanitizePdfText`):** normaliza ligaduras latinas (`fi`, `fl`, `ff`), guiones tipográficos, símbolos matemáticos, flechas y emojis antes del trazado para evitar caracteres faltantes en Skia PDF. Los datos originales de `ReportData` no se alteran.
 - **Compatibilidad de pruebas:** los colores base del generador son valores ARGB directos, por lo que las pruebas JVM de sanitización pueden cargar el objeto sin requerir una implementación Android de `Color`.
 

@@ -49,7 +49,7 @@ com.abdapps.visorwifi
 │   ├── PeriodAnalysis.kt           # Métricas agregadas del periodo para reporte
 │   ├── PeriodReportStatus.kt       # Estado global estadístico del periodo
 │   ├── ReportNarrativeGenerator.kt # Explicación y conclusión para cliente sin alterar métricas
-│   ├── PdfGenerator.kt            # Reporte PDF v2: 3 páginas, gráficas escaladas proporcionalmente y sanitización
+│   ├── PdfGenerator.kt            # Reporte PDF V5: 3 páginas, evidencia gráfica anotada, escalado y sanitización
 │   ├── WifiSnapshot.kt            # Captura desacoplada e instantánea del enlace Wi-Fi
 │   └── aplocator/                 # Modelos del módulo AP Locator
 │       ├── RssiOrientationSample.kt# Muestra atómica (azimut, RSSI, timestamp, BSSID, freq)
@@ -103,10 +103,12 @@ com.abdapps.visorwifi
 - La implementación de IA real es trabajo futuro. Actualizar la documentación si cambia este estado.
 - `LatencyPoint.lanLatency` y `wanLatency` representan ICMP. Los tiempos y destinos TCP complementarios van en campos separados y no se deben mezclar con promedios, jitter o pérdida ICMP.
 
-### 2.1 Reporte PDF v2
+### 2.1 Reporte PDF V5
 - `PdfGenerator` es únicamente una capa de presentación; recibe `ReportData` consolidado y no debe recalcular métricas ni alterar diagnóstico.
 - El reporte tiene tres páginas: resumen/diagnóstico, métricas agrupadas y evidencia/cierre.
 - Las gráficas se crean como bitmaps off-screen de alta resolución y se insertan preservando su relación de aspecto dentro del área segura A4. Nunca usar dimensiones de píxel como puntos PDF ni recortar ejes o leyendas.
+- Las anotaciones de picos LAN/WAN y peor RSSI sólo pueden proceder de muestras originales válidas. Las referencias RSSI deben reutilizar los criterios de clasificación existentes; no introducir umbrales nuevos.
+- Las recomendaciones del PDF deben respaldarse en métricas del periodo: pérdida ICMP, latencia WAN, señal WiFi o eventos registrados. No indicar incidencias que no aparezcan en los datos.
 
 ### 3. No Romper APIs Deprecadas de Compatibilidad
 - `WifiManager.connectionInfo` y `ScanResult.SSID` están anotados con `@Suppress("DEPRECATION")` intencionalmente para mantener compatibilidad desde `minSdk 26`. NO refactorizar ni eliminar estas llamadas a menos que sea explícitamente solicitado.
