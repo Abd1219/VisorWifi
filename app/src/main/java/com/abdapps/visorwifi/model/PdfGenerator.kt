@@ -45,13 +45,15 @@ object PdfGenerator {
     private fun executive(c: Canvas, d: ReportData) {
         header(c, d, "REPORTE DE DIAGNÓSTICO DE RED")
         var y = 112f; val p = d.periodAnalysis; val palette = palette(d.periodStatus)
-        card(c, M, y, CW, 104f, palette.third, palette.second)
+        card(c, M, y, CW, 120f, palette.third, palette.second)
         t(c, "ESTADO GENERAL DEL PERIODO", M + 16, y + 21, 8f, palette.second, true)
         t(c, palette.first, M + 16, y + 48, 18f, palette.second, true)
-        t(c, "Periodo: ${period(p)}", M + 16, y + 66, 8.5f, muted)
+        t(c, "Periodo monitoreado: ${period(p)}", M + 16, y + 66, 8.5f, muted)
         t(c, "Duración: ${duration(p)} · ${p.sampleCount} muestras", M + 16, y + 81, 8.5f, muted)
         t(c, "${p.stabilityScore}/100", W - M - 77, y + 48, 21f, palette.second, true)
-        t(c, "SCORE DE ESTABILIDAD", W - M - 116, y + 64, 6.8f, muted, true); y += 128
+        t(c, "SCORE DE ESTABILIDAD", W - M - 116, y + 64, 6.8f, muted, true)
+        wrap(c, "El score considera estabilidad de latencia, pérdida de paquetes, jitter y consistencia de la señal WiFi durante el periodo monitoreado.", M + 16, y + 93, CW - 32, tp(7.5f, muted))
+        y += 140
         section(c, "INDICADORES PRINCIPALES", y); y += 12
         val gap = 10f; val cw = (CW - gap * 2) / 3
         indicator(c, M, y, cw, "RED LOCAL", ms(d.lanLatencyAvgMs), lan(d.lanLatencyAvgMs))
@@ -60,18 +62,18 @@ object PdfGenerator {
         card(c, M, y, CW, 28f, Color.parseColor("#F8FAFC"), border)
         t(c, "Pérdida WAN: ${"%.1f".format(Locale.US, p.packetLossPercent)}%    ·    Jitter WAN: ${"%.1f".format(Locale.US, p.avgJitterMs)} ms    ·    Roaming: ${p.roamingEventsCount}", M + 12, y + 18, 8.5f, muted); y += 52
         section(c, "DIAGNÓSTICO AUTOMÁTICO", y); y += 12
-        card(c, M, y, CW, 224f, Color.parseColor("#F8FAFC"), border)
-        t(c, d.diagnosisTitle, M + 14, y + 22, 11f, ink, true); t(c, "CONFIANZA ${d.confidence}%", W - M - 86, y + 22, 8f, cyan, true)
+        card(c, M, y, CW, 210f, Color.parseColor("#F8FAFC"), border)
+        t(c, reportDiagnosisTitle(d.diagnosisTitle), M + 14, y + 22, 11f, ink, true); t(c, "CONFIANZA ${d.confidence}%", W - M - 86, y + 22, 8f, cyan, true)
         wrap(c, ReportNarrativeGenerator.statusContext(p, d.periodStatus, d.diagnosisTitle), M + 14, y + 30, CW - 28, tp(8.2f, Color.parseColor("#334155")))
         t(c, "EVIDENCIAS DETECTADAS", M + 14, y + 79, 7.5f, muted, true)
         var ey = y + 95
-        if (d.evidences.isEmpty()) { t(c, "Sin evidencias adicionales registradas.", M + 14, ey, 8.5f, muted); ey += 16 } else d.evidences.forEach { e ->
-            c.drawCircle(M + 18, ey - 3, 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = cyan }); ey += wrap(c, e, M + 26, ey - 8, CW - 44, tp(8.5f, Color.parseColor("#334155"))) + 5
+        if (d.evidences.isEmpty()) { t(c, "No se detectaron evidencias adicionales durante la sesión.", M + 14, ey, 8.5f, muted); ey += 16 } else d.evidences.take(3).forEach { e ->
+            c.drawCircle(M + 18, ey - 3, 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = cyan }); ey += wrap(c, formatEvidence(e), M + 26, ey - 8, CW - 44, tp(8.5f, Color.parseColor("#334155"))) + 5
         }
         val ry = maxOf(ey + 8, y + 150); card(c, M + 14, ry, CW - 28, 52f, Color.parseColor("#EAFBFD"), Color.parseColor("#9DE5EC"))
-        t(c, "RECOMENDACIÓN", M + 25, ry + 15, 7.5f, cyan, true); wrap(c, d.recommendation, M + 25, ry + 21, CW - 50, tp(8.5f, ink, true))
+        t(c, "RECOMENDACIÓN", M + 25, ry + 15, 7.5f, cyan, true); wrap(c, reportRecommendation(d.recommendation), M + 25, ry + 21, CW - 50, tp(8.5f, ink, true))
         // Mantener la conclusión debajo de una recomendación que pueda ocupar varias líneas.
-        y = maxOf(y + 242, ry + 60)
+        y = maxOf(y + 226, ry + 60)
         section(c, "CONCLUSIÓN DEL MONITOREO", y); y += 10
         card(c, M, y, CW, 70f, Color.parseColor("#F8FAFC"), border)
         wrap(c, d.executiveConclusion, M + 14, y + 13, CW - 28, tp(8.7f, ink))
@@ -91,8 +93,9 @@ object PdfGenerator {
             row("TCP complementario LAN", tcp(d.latencyHistory.map { it.lanTcpLatency }, d.latencyHistory.count { it.lanTcpTarget != null }), "Informativo", "TCP connect; destino: ${target(d.latencyHistory.map { it.lanTcpTarget })}"),
             row("TCP complementario WAN", tcp(d.latencyHistory.map { it.wanTcpLatency }, d.latencyHistory.count { it.wanTcpTarget != null }), "Informativo", "TCP connect; destino: ${target(d.latencyHistory.map { it.wanTcpTarget })}"))) + 18
         y = group(c, "CONEXIÓN WIFI", y, listOf(
-            row("RSSI promedio", rssi(p.rssiAvg), quality(p.rssiAvg.toInt()), "Nivel promedio de intensidad de señal."),
-            row("RSSI mínimo", rssi(p.rssiMin), quality(p.rssiMin.toInt()), "Peor nivel registrado durante la sesión."),
+            row("RSSI promedio", rssi(p.rssiAvg), quality(p.rssiAvg.toInt()), "Nivel promedio de intensidad de señal durante el periodo."),
+            row("Mejor nivel RSSI", rssi(p.rssiMax), quality(p.rssiMax.toInt()), "Máximo registrado durante la sesión."),
+            row("Peor nivel RSSI", rssi(p.rssiMin), quality(p.rssiMin.toInt()), "Mínimo registrado durante la sesión."),
             row("Varianza RSSI", "%.1f dBm^2".format(Locale.US, p.rssiVariance), variance(p.rssiVariance), "< 10 estable; > 30 fluctuante."),
             row("Velocidad PHY", "${d.phyRateMbps} Mbps", "Informativo", "Velocidad negociada entre AP y dispositivo."),
             row("Banda WiFi activa", d.wifiBand, "Informativo", "Banda detectada al generar el reporte."),
@@ -105,19 +108,22 @@ object PdfGenerator {
     private fun evidence(context: Context, c: Canvas, d: ReportData) {
         header(c, d, "EVIDENCIA GRÁFICA Y CIERRE"); var y = 114f
         section(c, "FIGURA A — HISTORIAL DE LATENCIAS", y); y = chart(c, graph(context, d.latencyHistory, false), y + 10)
-        t(c, "LAN en cyan y WAN en morado. Las escalas y la leyenda reflejan las muestras registradas.", M, y + 12, 8f, muted); y += 34
+        t(c, "LAN en cyan y WAN en morado; escala en ms. Los picos se muestran sin truncar.", M, y + 12, 8f, muted); y += 34
         section(c, "FIGURA B — HISTORIAL DE INTENSIDAD DE SEÑAL WIFI", y); y = chart(c, graph(context, d.latencyHistory, true), y + 10)
-        t(c, "RSSI en dBm durante el periodo monitoreado.", M, y + 12, 8f, muted); y += 32
-        section(c, "REGISTRO DE EVENTOS Y CAMBIOS DE RED", y); y += 10; card(c, M, y, CW, 82f, Color.parseColor("#F8FAFC"), border)
-        if (d.networkEvents.isEmpty()) wrap(c, "No se detectaron eventos significativos de red durante el monitoreo.", M + 12, y + 15, CW - 24, tp(8.5f, muted))
-        else { var ey = y + 13; d.networkEvents.takeLast(5).forEach { ey += wrap(c, "• $it", M + 12, ey, CW - 24, tp(7.8f, Color.parseColor("#334155"))) + 3 } }
-        y += 100
-        if (!d.technicianNotes.isNullOrBlank()) { section(c, "OBSERVACIONES Y ANOTACIONES DE CAMPO", y); y += 10; card(c, M, y, CW, 60f, Color.parseColor("#F8FAFC"), border); wrap(c, d.technicianNotes, M + 12, y + 12, CW - 24, tp(8.3f, ink, italic = true)); y += 76 }
-        signatures(c, d, minOf(y, 680f)); footer(c, 3)
+        t(c, "RSSI en dBm durante el periodo monitoreado; las muestras corresponden a datos reales.", M, y + 12, 8f, muted); y += 28
+        section(c, "REGISTRO DE EVENTOS Y CAMBIOS DE RED", y); y += 10; card(c, M, y, CW, 76f, Color.parseColor("#F8FAFC"), border)
+        if (d.networkEvents.isEmpty()) wrap(c, "No se detectaron eventos significativos de red durante el periodo monitoreado.", M + 12, y + 15, CW - 24, tp(8.5f, muted))
+        else { var ey = y + 12; d.networkEvents.takeLast(3).forEach { event -> ey += wrap(c, formatEvent(event), M + 12, ey, CW - 24, tp(7.5f, Color.parseColor("#334155"))) + 2 } }
+        y += 92
+        section(c, "OBSERVACIONES Y ANOTACIONES DE CAMPO", y); y += 10
+        card(c, M, y, CW, 62f, Color.parseColor("#F8FAFC"), border)
+        t(c, "Notas registradas por el técnico durante la visita", M + 12, y + 14, 7.3f, muted, true)
+        wrap(c, d.technicianNotes?.takeIf { it.isNotBlank() } ?: "No se registraron observaciones adicionales durante la sesión.", M + 12, y + 21, CW - 24, tp(8.1f, ink, italic = true)); y += 78
+        signatures(c, d, y); footer(c, 3)
     }
 
     // Bitmap pixels are converted by aspect ratio into PDF points; they are never pasted 1:1.
-    private fun chart(c: Canvas, b: Bitmap, y: Float): Float { val h = minOf(CW * b.height / b.width, 166f); val w = h * b.width / b.height; val x = M + (CW - w) / 2; c.drawBitmap(b, null, RectF(x, y, x + w, y + h), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)); return y + h }
+    private fun chart(c: Canvas, b: Bitmap, y: Float): Float { val h = minOf(CW * b.height / b.width, 140f); val w = h * b.width / b.height; val x = M + (CW - w) / 2; c.drawBitmap(b, null, RectF(x, y, x + w, y + h), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)); return y + h }
     private fun header(c: Canvas, d: ReportData, subtitle: String) { t(c, "VISOR WIFI", M, 56f, 19f, ink, true); t(c, subtitle, M, 73f, 9.5f, cyan, true); val x = W - M - 168; t(c, datetime(d.dateTime), x, 45f, 8.3f, muted); t(c, "Técnico: ${d.technicianName}", x, 59f, 8.3f, muted); t(c, "Sitio: ${d.siteName}", x, 73f, 8.3f, muted); c.drawRect(M, 86f, W - M, 88f, Paint().apply { color = cyan }) }
     private fun footer(c: Canvas, p: Int) { c.drawLine(M, FOOTER - 10, W - M, FOOTER - 10, Paint().apply { color = border }); t(c, "Reporte generado por Visor WiFi · El análisis refleja el periodo monitoreado.", M, FOOTER, 7.3f, muted); t(c, "Página $p de 3", W - M - 50, FOOTER, 7.3f, muted) }
     private fun indicator(c: Canvas, x: Float, y: Float, w: Float, title: String, value: String, state: String) { card(c, x, y, w, 64f, Color.WHITE, border); t(c, title, x + 10, y + 16, 7f, muted, true); t(c, value, x + 10, y + 38, 13f, ink, true); t(c, state.uppercase(), x + 10, y + 53, 7.2f, color(state), true) }
@@ -131,7 +137,11 @@ object PdfGenerator {
     private fun color(s:String)=when(s.lowercase()){ "óptimo","excelente","muy buena","buena","estable"->Color.parseColor("#15803D");"degradado","aceptable","regular","moderada","informativo"->Color.parseColor("#B45309");"inestable","crítico","débil","frecuente","timeout","sin señal","fluctuante"->Color.parseColor("#B91C1C");else->muted }
     private fun ms(v:Float)=if(v>=0)"%.1f ms".format(Locale.US,v)else "Timeout";private fun rssi(v:Float)=if(v>-127)"%.1f dBm".format(Locale.US,v)else "Sin señal";private fun lossNote(v:Float)=if(v == 0f) "No se detectaron pérdidas de paquetes ICMP durante el periodo monitoreado." else "Porcentaje de respuestas ICMP WAN sin respuesta durante el periodo."
     private fun lan(v:Float)=when{v<0->"Timeout";v<15->"Óptimo";v<50->"Aceptable";else->"Inestable"};private fun wan(v:Float)=when{v<0->"Timeout";v<100->"Óptimo";v<150->"Degradado";v<200->"Inestable";else->"Crítico"};private fun spike(v:Int)=when{v==0->"Óptimo";v<5->"Degradado";v<10->"Inestable";else->"Crítico"};private fun loss(v:Float)=when{v<2->"Óptimo";v<5->"Degradado";v<10->"Inestable";else->"Crítico"};private fun jitter(v:Float)=when{v<15->"Óptimo";v<30->"Aceptable";else->"Inestable"};private fun variance(v:Float)=when{v<10->"Estable";v<30->"Moderada";else->"Fluctuante"};private fun roaming(v:Int)=when{v==0->"Óptimo";v<3->"Aceptable";else->"Frecuente"};private fun quality(v:Int)=when{v>=-50->"Excelente";v>=-60->"Muy buena";v>=-70->"Buena";v>=-80->"Regular";v>-127->"Débil";else->"Sin señal"}
-    private fun period(p:PeriodAnalysis):String{val f=SimpleDateFormat("HH:mm:ss",Locale.getDefault());return "${f.format(Date(p.periodStartMs))} - ${f.format(Date(p.periodEndMs))}"};private fun duration(p:PeriodAnalysis):String{val s=((p.periodEndMs-p.periodStartMs)/1000).coerceAtLeast(0);return if(s<60)"${s}s" else if(s<3600)"${s/60}m ${s%60}s" else "${s/3600}h ${(s%3600)/60}m"};private fun datetime(s:String)=s.replace(Regex("^(\\d{2}/\\d{2}/\\d{4})\\s+(\\d{1,2}:\\d{2})$"),"$1 · $2")
+    private fun period(p:PeriodAnalysis):String{val f=SimpleDateFormat("HH:mm:ss",Locale.getDefault());return "${f.format(Date(p.periodStartMs))} – ${f.format(Date(p.periodEndMs))}"};private fun duration(p:PeriodAnalysis):String{val s=((p.periodEndMs-p.periodStartMs)/1000).coerceAtLeast(0);return if(s<60)"${s} s" else if(s<3600)"${s/60} min ${s%60} s" else "${s/3600} h ${(s%3600)/60} min"};private fun datetime(s:String)=s.replace(Regex("^(\\d{2}/\\d{2}/\\d{4})\\s+(\\d{1,2}:\\d{2})$"),"$1 · $2")
+    private fun reportDiagnosisTitle(title: String) = if (title.equals("Red saludable", ignoreCase = true)) "Sin incidencias significativas durante el periodo" else title
+    private fun reportRecommendation(recommendation: String) = if (recommendation.contains("funcionando en condiciones óptimas", ignoreCase = true)) "Mantener el monitoreo periódico; durante esta sesión no se detectaron incidencias significativas." else recommendation
+    private fun formatEvidence(evidence: String): String { val kind = when { evidence.contains("avg", true) || evidence.contains("promedio", true) -> "Promedio"; evidence.contains("max", true) || evidence.contains("pico", true) -> "Pico"; evidence.contains("actual", true) || evidence.contains("intensidad de señal", true) || evidence.contains("velocidad de enlace", true) -> "Muestra actual"; else -> "Evidencia" }; return "$kind: $evidence" }
+    private fun formatEvent(event: String): String { val time = Regex("\\[(\\d{2}:\\d{2}:\\d{2})]").find(event)?.groupValues?.get(1) ?: "no disponible"; val type = when { event.contains("Cambio de RED", true) -> "Cambio de red"; event.contains("Roaming", true) -> "Roaming"; else -> "Evento de red" }; val detail = event.replace(Regex("^\\[\\d{2}:\\d{2}:\\d{2}]\\s*"), "").replace(Regex("^[^A-Za-zÁÉÍÓÚáéíóú]*"), ""); return "Hora aprox.: $time · Tipo: $type · Descripción: $detail" }
     private fun tcp(v:List<Float>,n:Int):String{if(n==0)return "No utilizada";val ok=v.filter{it>=0};return if(ok.isEmpty())"Sin respuesta (0/$n)" else "%.1f ms (%d/%d)".format(Locale.US,ok.average(),ok.size,n)};private fun target(t:List<String?>)=t.lastOrNull{it!=null}?:"no disponible"
     private fun graph(context:Context,h:List<LatencyPoint>,rssi:Boolean):Bitmap{val w=1400;val ht=430;val chart=LineChart(context).apply{layoutParams=ViewGroup.LayoutParams(w,ht);description.isEnabled=false;setTouchEnabled(false);setDrawGridBackground(false);setBackgroundColor(Color.WHITE);setNoDataText("Sin datos históricos para graficar");setExtraOffsets(8f,6f,8f,4f);legend.apply{isEnabled=true;textColor=Color.parseColor("#334155");textSize=14f;form=Legend.LegendForm.LINE;formSize=14f;horizontalAlignment=Legend.LegendHorizontalAlignment.CENTER;verticalAlignment=Legend.LegendVerticalAlignment.TOP;orientation=Legend.LegendOrientation.HORIZONTAL;setDrawInside(false)};xAxis.apply{position=XAxis.XAxisPosition.BOTTOM;textColor=muted;textSize=14f;gridColor=border;setDrawGridLines(true);setLabelCount(5,false);setAvoidFirstLastClipping(true);valueFormatter=object:ValueFormatter(){override fun getFormattedValue(v:Float)="${v.toInt()}s"}};axisLeft.apply{textColor=muted;textSize=14f;gridColor=border;setDrawGridLines(true);axisMinimum=if(rssi)-100f else 0f;setLabelCount(if(rssi)4 else 5,false);if(rssi){axisMaximum=-30f;valueFormatter=object:ValueFormatter(){override fun getFormattedValue(v:Float)="${v.toInt()} dBm"}}else valueFormatter=object:ValueFormatter(){override fun getFormattedValue(v:Float)="${v.toInt()} ms"}};axisRight.isEnabled=false}
         if(rssi){val e=h.mapIndexedNotNull{i,p->p.rssi.takeIf{it>-127}?.let{Entry(i.toFloat(),it.toFloat())}};if(e.isNotEmpty())chart.data=LineData(LineDataSet(e,"RSSI (dBm)").apply{color=cyan;lineWidth=5f;setDrawCircles(false);setDrawValues(false);setDrawFilled(true);fillColor=cyan;fillAlpha=24})}else{val l=h.mapIndexedNotNull{i,p->p.lanLatency.takeIf{it>=0}?.let{Entry(i.toFloat(),it)}};val n=h.mapIndexedNotNull{i,p->p.wanLatency.takeIf{it>=0}?.let{Entry(i.toFloat(),it)}};val sets=mutableListOf<ILineDataSet>();if(l.isNotEmpty())sets+=LineDataSet(l,"LAN (Acceso local)").apply{color=cyan;lineWidth=5f;setDrawCircles(false);setDrawValues(false)};if(n.isNotEmpty())sets+=LineDataSet(n,"WAN (Internet)").apply{color=purple;lineWidth=5f;setDrawCircles(false);setDrawValues(false)};if(sets.isNotEmpty())chart.data=LineData(sets)}
