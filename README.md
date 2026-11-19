@@ -13,7 +13,8 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
 *   **Medición Concurrente de Latencia (LAN & WAN)**:
     *   **LAN (Acceso Local)**: Mide el tiempo de respuesta (RTT) hacia la puerta de enlace (Gateway) del router de forma periódica cada segundo.
     *   **WAN (Internet)**: Mide el tiempo de respuesta hacia los servidores DNS públicos primarios (DNS de Google `8.8.8.8` y Cloudflare `1.1.1.1`).
-*   **Cálculo y Visualización de Jitter de Red**: Incorpora un overlay visual sumamente tenue en la gráfica de latencia que muestra el Jitter (variabilidad de la latencia) en tiempo real para un análisis profundo de la inestabilidad de la transmisión sin generar ruido visual en la UI.
+*   **Vistas de Monitor para cada contexto**: El selector local **RESUMEN / TÉCNICA** alterna únicamente la densidad de información: el resumen muestra la latencia de Internet y una lectura clara de la conexión Wi-Fi; la vista técnica conserva las métricas LAN/WAN, los historiales y el registro de roaming. No modifica la captura ni el diagnóstico.
+*   **Cálculo y Visualización de Jitter de Red**: El jitter (variabilidad absoluta entre respuestas ICMP consecutivas) se presenta en una gráfica independiente, con curvas LAN y WAN. Así no comparte escala ni se confunde con la latencia medida.
 *   **Pérdida de respuestas ICMP**: Calcula el porcentaje de respuestas ICMP perdidas sobre una ventana móvil de los últimos 100 puntos. Las comprobaciones TCP se presentan aparte y no cuentan como respuestas ICMP.
 *   **Selector de Modos Neo-Brutalista (`ModeSwitcher`)**: Barra superior de alternancia intuitiva y rápida para cambiar entre la vista de **MONITOR** de latencia en vivo y el módulo de localización **AP LOCATOR**.
 *   **Módulo AP Locator (Localización Estimada de Access Points)**:
@@ -35,7 +36,7 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   **Ping ICMP**: Intenta medir RTT con `/system/bin/ping`.
     *   **Sonda TCP complementaria**: Si falla ICMP, intenta establecer conexiones TCP en puertos seleccionados. La tarjeta y el PDF muestran ese tiempo por separado; no se mezcla con latencia, jitter ni pérdida ICMP. Un rechazo de conexión cuenta como respuesta del host y su tiempo se registra como tiempo de conexión TCP.
     *   **Sin simulación telemétrica**: Si fallan ICMP y las sondas TCP, se conserva el fallo; la app no inventa valores de latencia.
-*   **Historial de Intensidad de Señal RSSI**: Incorpora un gráfico dedicado ([RssiChart](app/src/main/java/com/abdapps/visorwifi/ui/components/RssiChart.kt)) que mapea en tiempo real la señal en dBm sobre líneas de umbrales técnicos preestablecidos (Bueno: -60 dBm, Regular: -70 dBm, Malo: -80 dBm) codificados por colores.
+*   **Historiales fieles a las muestras**: Las gráficas de latencia, jitter y RSSI usan segmentos lineales, sin suavizado que pudiera ocultar oscilaciones reales. El gráfico RSSI ([RssiChart](app/src/main/java/com/abdapps/visorwifi/ui/components/RssiChart.kt)) conserva sus referencias técnicas (Bueno: -60 dBm, Regular: -70 dBm, Malo: -80 dBm).
 *   **Detección de Roaming y Transición de Red**: 
     *   Registra en tiempo real cuando el dispositivo realiza itinerancia (**Roaming** inalámbrico al cambiar de antena/BSSID dentro del mismo SSID).
     *   Registra cambios de red completos (**SSID**) detallando la fuerza de la señal al momento de la transición.
@@ -84,7 +85,10 @@ El código fuente está completamente documentado y comentado en español bajo e
 *   **Interfaz de Usuario (UI)**:
     *   [MainActivity.kt](app/src/main/java/com/abdapps/visorwifi/MainActivity.kt): Actividad principal con navegación Compose.
     *   [ModeSwitcher.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/ModeSwitcher.kt): Selector visual superior entre Monitor y AP Locator.
-    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal de monitoreo en tiempo real, con control de inicio/parada legible aun con espacio horizontal reducido.
+    *   [LatencyMonitorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/LatencyMonitorScreen.kt): Pantalla principal con vistas Resumen y Técnica; conserva el control de inicio/parada legible aun con espacio horizontal reducido.
+    *   [MonitorViewModeSwitcher.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/MonitorViewModeSwitcher.kt): Alternancia local entre el resumen para cliente y el detalle técnico, sin alterar datos.
+    *   [ConnectionSummaryCard.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/ConnectionSummaryCard.kt): Lectura de SSID, calidad RSSI, nivel y banda derivada de la última muestra.
+    *   [JitterChart.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/JitterChart.kt): Historial independiente de jitter ICMP LAN/WAN.
     *   [ApLocatorScreen.kt](app/src/main/java/com/abdapps/visorwifi/ui/screens/ApLocatorScreen.kt): Pantalla declarativa completa del módulo AP Locator (3 estados).
     *   [CompassView.kt](app/src/main/java/com/abdapps/visorwifi/ui/components/aplocator/CompassView.kt): Brújula nativa interactiva en Canvas Compose.
 

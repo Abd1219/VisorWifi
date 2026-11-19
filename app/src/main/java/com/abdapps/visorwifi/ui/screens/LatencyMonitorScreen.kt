@@ -61,6 +61,10 @@ import com.abdapps.visorwifi.model.PdfGenerator
 import com.abdapps.visorwifi.ui.components.DiagnosisCard
 import com.abdapps.visorwifi.ui.components.LatencyCard
 import com.abdapps.visorwifi.ui.components.LatencyChart
+import com.abdapps.visorwifi.ui.components.JitterChart
+import com.abdapps.visorwifi.ui.components.ConnectionSummaryCard
+import com.abdapps.visorwifi.ui.components.MonitorViewMode
+import com.abdapps.visorwifi.ui.components.MonitorViewModeSwitcher
 import com.abdapps.visorwifi.ui.components.RoamingEventLog
 import com.abdapps.visorwifi.ui.components.WifiInfoCard
 import com.abdapps.visorwifi.ui.components.RssiChart
@@ -122,6 +126,7 @@ fun LatencyMonitorScreen(
     var showInputDialog by remember { mutableStateOf(false) }
     var showPreviewDialog by remember { mutableStateOf(false) }
     var generatedFile by remember { mutableStateOf<File?>(null) }
+    var viewMode by remember { mutableStateOf(MonitorViewMode.SUMMARY) }
 
     // ViewModel del diagnóstico de red — ciclo de vida vinculado al Activity
     val diagnosisViewModel: NetworkDiagnosisViewModel = viewModel()
@@ -360,9 +365,29 @@ fun LatencyMonitorScreen(
             }
         }
 
+        MonitorViewModeSwitcher(
+            selectedMode = viewMode,
+            onModeSelected = { viewMode = it }
+        )
+
         // ── Resultado principal: primero explica qué ocurre ────────────────
         DiagnosisCard(state = diagnosisState)
 
+        if (viewMode == MonitorViewMode.SUMMARY) {
+            LatencyCard(
+                modifier = Modifier.fillMaxWidth(),
+                label = "LATENCIA DE INTERNET",
+                sublabel = "Respuesta ICMP hacia Internet",
+                accentColor = Color(0xFFD946EF),
+                value = latestPoint?.let {
+                    if (it.wanLatency >= 0) String.format(Locale.US, "%.1f ms", it.wanLatency) else "Sin respuesta"
+                } ?: "-- ms",
+                packetLoss = wanLoss,
+                statusText = latencyPresentationStatus(latestPoint?.wanLatency, wanLoss),
+                supplementalValue = latestPoint?.let { formatTcpFallback(it.wanTcpLatency, it.wanTcpTarget) }
+            )
+            ConnectionSummaryCard(latestPoint = latestPoint, service = service)
+        } else {
         // ── Tarjetas de Latencia LAN y WAN Instantáneas ────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -445,7 +470,7 @@ fun LatencyMonitorScreen(
                     modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
                 )
                 Text(
-                    text = "LAN en cyan · WAN en morado · jitter en trazo tenue",
+                    text = "LAN en cyan · WAN en morado · últimos 60 segundos",
                     fontSize = 10.sp,
                     color = Color(0xFF8E9AA8),
                     modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
@@ -461,9 +486,40 @@ fun LatencyMonitorScreen(
             }
         }
 
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF263238), RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F141C))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = "HISTORIAL DE JITTER",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF536371),
+                    modifier = Modifier.padding(bottom = 12.dp, start = 8.dp)
+                )
+                Text(
+                    text = "Variación entre respuestas ICMP consecutivas · LAN en cyan · WAN en morado",
+                    fontSize = 10.sp,
+                    color = Color(0xFF8E9AA8),
+                    modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+                )
+                JitterChart(
+                    history = historyList,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .requiredHeight(220.dp)
+                )
+            }
+        }
+
         // ── Registro e Historial Visual de Cambios de Antena / Roaming ──────
         if (roamEvents.isNotEmpty() || isServiceRunning) {
             RoamingEventLog(roamEvents = roamEvents)
+        }
         }
 
         // ── Tarjeta Informativa de Procesamiento en Segundo Plano ───────────

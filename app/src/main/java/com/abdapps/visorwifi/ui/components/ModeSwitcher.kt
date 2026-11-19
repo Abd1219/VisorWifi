@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -54,7 +55,8 @@ fun ModeSwitcher(
                 .clip(RoundedCornerShape(10.dp))
                 .background(if (isMonitorActive) Color(0xFF00F0FF) else Color.Transparent)
                 .clickable { onScreenSelected(AppScreen.MONITOR) }
-                .padding(vertical = 10.dp),
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -75,7 +77,8 @@ fun ModeSwitcher(
                 .clip(RoundedCornerShape(10.dp))
                 .background(if (isLocatorActive) Color(0xFF00F0FF) else Color.Transparent)
                 .clickable { onScreenSelected(AppScreen.AP_LOCATOR) }
-                .padding(vertical = 10.dp),
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(

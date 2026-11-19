@@ -168,8 +168,8 @@ fun populateRssiChartWithHistory(chart: LineChart, history: List<LatencyPoint>) 
         lineWidth = 2.0f
         setDrawCircles(false)
         setDrawCircleHole(false)
-        mode = if (rssiEntries.size >= 3) LineDataSet.Mode.HORIZONTAL_BEZIER else LineDataSet.Mode.LINEAR
-        cubicIntensity = 0.12f
+        // No interpolar para no esconder oscilaciones reales de RSSI.
+        mode = LineDataSet.Mode.LINEAR
         setDrawValues(false)
         setDrawFilled(true)
         fillColor = Color.parseColor("#00FF66")

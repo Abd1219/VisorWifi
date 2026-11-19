@@ -1,7 +1,6 @@
 package com.abdapps.visorwifi.ui.components
 
 import android.graphics.Color
-import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,7 +15,6 @@ import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import java.util.ArrayList
-import kotlin.math.abs
 
 /**
  * Componente Compose que envuelve de forma interoperable el LineChart de MPAndroidChart.
@@ -46,7 +44,6 @@ fun LatencyChart(
         }
     )
 }
-
 /**
  * Define y personaliza el estilo gráfico, interacciones y rejillas del componente LineChart.
  * Configura los ejes, la posición de las leyendas y los formateadores de valores.
@@ -120,7 +117,6 @@ fun setupChartStyling(chart: LineChart) {
         axisRight.isEnabled = false
     }
 }
-
 /**
  * Carga todo el historial almacenado en el búfer del servicio directamente a la gráfica.
  * Se ejecuta al iniciar la aplicación o al reconectarse al servicio activo.
@@ -129,11 +125,8 @@ fun setupChartStyling(chart: LineChart) {
  * @param history Colección de puntos de medición previos.
  */
 fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
-    Log.d("LatencyChart", "populateChartWithHistory: history size = ${history.size}")
     val lanEntries = ArrayList<Entry>()
     val wanEntries = ArrayList<Entry>()
-    val lanJitterEntries = ArrayList<Entry>()
-    val wanJitterEntries = ArrayList<Entry>()
 
     history.forEachIndexed { index, point ->
         val x = index.toFloat()
@@ -141,16 +134,6 @@ fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
         if (point.lanLatency >= 0) lanEntries.add(Entry(x, point.lanLatency))
         if (point.wanLatency >= 0) wanEntries.add(Entry(x, point.wanLatency))
 
-        // Calcular Jitter punto a punto: abs(currentPing - previousPing)
-        if (index > 0) {
-            val prev = history[index - 1]
-            if (prev.lanLatency >= 0 && point.lanLatency >= 0) {
-                lanJitterEntries.add(Entry(x, abs(point.lanLatency - prev.lanLatency)))
-            }
-            if (prev.wanLatency >= 0 && point.wanLatency >= 0) {
-                wanJitterEntries.add(Entry(x, abs(point.wanLatency - prev.wanLatency)))
-            }
-        }
     }
 
     if (lanEntries.isEmpty() && wanEntries.isEmpty()) {
@@ -160,11 +143,10 @@ fun populateChartWithHistory(chart: LineChart, history: List<LatencyPoint>) {
     }
 
     val dataSets = ArrayList<ILineDataSet>()
-    // Siempre inyectar los 4 datasets en orden para consistencia de índices y evitar crashes
+    // Sólo se muestran las mediciones ICMP principales. El jitter es una diferencia entre
+    // muestras y, al compartir eje, se confundía con las curvas de latencia.
     dataSets.add(createDataSet(lanEntries, "LAN ICMP (Acceso Local)", "#00F0FF"))
     dataSets.add(createDataSet(wanEntries, "WAN ICMP (Internet)", "#D946EF"))
-    dataSets.add(createJitterDataSet(lanJitterEntries, "#6600F0FF")) // LAN Jitter tenue
-    dataSets.add(createJitterDataSet(wanJitterEntries, "#66D946EF")) // WAN Jitter tenue
 
     val lineData = LineData(dataSets)
     chart.data = lineData
@@ -197,89 +179,11 @@ fun createDataSet(entries: ArrayList<Entry>, label: String, colorHex: String): L
         lineWidth = 2.2f
         setDrawCircles(false) // Deshabilita los puntos marcadores para mejorar el rendimiento
         setDrawCircleHole(false)
-        mode = if (entries.size >= 3) LineDataSet.Mode.HORIZONTAL_BEZIER else LineDataSet.Mode.LINEAR
-        cubicIntensity = 0.12f
+        // No interpolar: cada segmento refleja la variación real entre muestras.
+        mode = LineDataSet.Mode.LINEAR
         setDrawValues(false)
         setDrawFilled(true) // Área de sombra bajo la curva
         fillColor = Color.parseColor(colorHex)
         fillAlpha = 15 // Transparencia sutil de 15/255
-    }
-}
-
-/**
- * Fábrica de conjuntos de datos lineales para Jitter como overlay visual tenue.
- * Diseñado para ser muy discreto y no saturar la UI.
- *
- * @param entries Lista de coordenadas X e Y correspondientes al dataset de Jitter.
- * @param colorHex Representación en formato hexadecimal del color de la línea (incluye canal alfa).
- * @return Estructura optimizada [LineDataSet] para Jitter.
- */
-fun createJitterDataSet(entries: ArrayList<Entry>, colorHex: String): LineDataSet {
-    return LineDataSet(entries, "").apply {
-        color = Color.parseColor(colorHex)
-        lineWidth = 1.2f // Trazo fino pero visible
-        setDrawCircles(false)
-        setDrawCircleHole(false)
-        mode = if (entries.size >= 3) LineDataSet.Mode.HORIZONTAL_BEZIER else LineDataSet.Mode.LINEAR
-        cubicIntensity = 0.12f
-        setDrawValues(false)
-        setDrawFilled(false) // Sin relleno para el Jitter
-        form = Legend.LegendForm.NONE // Omitir de la leyenda para evitar ruido visual
-    }
-}
-
-/**
- * Añade un nuevo punto telemétrico de forma segura en tiempo real en la gráfica interactiva.
- *
- * @param chart Instancia de la gráfica.
- * @param point Nuevo punto de latencia registrado.
- */
-fun addPointToChart(chart: LineChart, point: LatencyPoint) {
-    var data = chart.data
-
-    if (data == null) {
-        val lanDataSet = createDataSet(ArrayList(), "LAN ICMP (Acceso Local)", "#00F0FF")
-        val wanDataSet = createDataSet(ArrayList(), "WAN ICMP (Internet)", "#D946EF")
-        val lanJitterDataSet = createJitterDataSet(ArrayList(), "#6600F0FF")
-        val wanJitterDataSet = createJitterDataSet(ArrayList(), "#66D946EF")
-        data = LineData(lanDataSet, wanDataSet, lanJitterDataSet, wanJitterDataSet)
-        chart.data = data
-    }
-
-    val lanSet = data.getDataSetByIndex(0) as? LineDataSet
-    val wanSet = data.getDataSetByIndex(1) as? LineDataSet
-    val lanJitterSet = data.getDataSetByIndex(2) as? LineDataSet
-    val wanJitterSet = data.getDataSetByIndex(3) as? LineDataSet
-
-    if (lanSet != null && wanSet != null && lanJitterSet != null && wanJitterSet != null) {
-        // Resolver de forma segura la mayor coordenada X registrada hasta el momento
-        val maxLanX = if (lanSet.entryCount > 0) lanSet.getEntryForIndex(lanSet.entryCount - 1).x else -1f
-        val maxWanX = if (wanSet.entryCount > 0) wanSet.getEntryForIndex(wanSet.entryCount - 1).x else -1f
-        val nextX = maxOf(maxLanX, maxWanX) + 1f
-
-        // Adicionar únicamente si representa una latencia válida no fallida
-        if (point.lanLatency >= 0) {
-            data.addEntry(Entry(nextX, point.lanLatency), 0)
-            if (lanSet.entryCount > 1) {
-                val prevVal = lanSet.getEntryForIndex(lanSet.entryCount - 2).y
-                data.addEntry(Entry(nextX, abs(point.lanLatency - prevVal)), 2)
-            }
-        }
-        if (point.wanLatency >= 0) {
-            data.addEntry(Entry(nextX, point.wanLatency), 1)
-            if (wanSet.entryCount > 1) {
-                val prevVal = wanSet.getEntryForIndex(wanSet.entryCount - 2).y
-                data.addEntry(Entry(nextX, abs(point.wanLatency - prevVal)), 3)
-            }
-        }
-
-        // Indicarle a la gráfica que su estructura de datos interna se actualizó
-        data.notifyDataChanged()
-        chart.notifyDataSetChanged()
-        
-        // Mantener el scroll dinámico acotado a los últimos 60 segundos
-        chart.setVisibleXRangeMaximum(60f)
-        chart.moveViewToX(nextX)
-        chart.invalidate()
     }
 }

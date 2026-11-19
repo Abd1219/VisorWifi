@@ -10,7 +10,7 @@ VisorWifi organiza el código por responsabilidades (UI, ViewModels, motores y a
 
 ```
 [ Capa de Presentación (UI) ]
-  Jetpack Compose + StateFlow + ModeSwitcher
+  Jetpack Compose + StateFlow + ModeSwitcher + MonitorViewModeSwitcher
         │
         ▼
 [ Capa de ViewModel ]
@@ -59,6 +59,14 @@ Cuando el usuario entra directamente a la pantalla de **AP Locator** sin tener i
 
 ### 2.3 Control de inicio y parada del monitor
 `LatencyMonitorScreen` presenta el estado del servicio junto al botón **MONITOREAR** o **DETENER**. La columna informativa usa el espacio flexible de la fila para que el botón se mida con el ancho de su etiqueta, mantenga una altura mínima de 48 dp y no divida el texto en varias líneas. Si el ancho disponible fuera excepcionalmente insuficiente, la etiqueta se limita a una línea con truncado en lugar de aumentar desproporcionadamente la altura de la tarjeta.
+
+### 2.4 Presentación resumida y técnica
+`MonitorViewModeSwitcher` mantiene estado local de Compose con dos modos: **RESUMEN** y **TÉCNICA**. Este estado sólo decide qué componentes se componen y no cambia el servicio, el historial, las métricas ni el diagnóstico.
+
+- **Resumen:** presenta la latencia ICMP actual hacia Internet y `ConnectionSummaryCard`, que deriva SSID, calidad RSSI, nivel en dBm y banda desde la última `LatencyPoint`.
+- **Técnica:** presenta tarjetas LAN/WAN, históricos de latencia y RSSI, `JitterChart` y el registro de roaming.
+
+`JitterChart` calcula, para cada par consecutivo de respuestas ICMP válidas, `abs(actual - anterior)`. LAN y WAN permanecen como series independientes y el jitter se renderiza fuera de `LatencyChart` para no mezclar escalas. Las tres gráficas usan segmentos lineales: no se interpola ni suaviza telemetría.
 
 ---
 

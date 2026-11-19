@@ -67,10 +67,13 @@ com.abdapps.visorwifi
 │   │   └── ApLocatorScreen.kt     # Pantalla declarativa de AP Locator (SELECT_AP, SCANNING, RESULT)
 │   ├── components/
 │   │   ├── ModeSwitcher.kt        # Selector superior Neo-Brutalista de pantallas (Monitor / AP Locator)
+│   │   ├── MonitorViewModeSwitcher.kt # Selector local de densidad (Resumen / Técnica) del monitor
+│   │   ├── ConnectionSummaryCard.kt # Resumen de SSID, RSSI y banda de la última muestra
 │   │   ├── WifiInfoCard.kt        # Tarjeta de detalles del enlace Wi-Fi
 │   │   ├── DiagnosisCard.kt       # Tarjeta de diagnóstico de red
 │   │   ├── LatencyCard.kt         # Tarjeta de métrica instantánea LAN/WAN
-│   │   ├── LatencyChart.kt        # Gráfica MPAndroidChart de latencia y jitter
+│   │   ├── LatencyChart.kt        # Gráfica MPAndroidChart de latencia ICMP LAN/WAN
+│   │   ├── JitterChart.kt         # Gráfica MPAndroidChart dedicada a jitter LAN/WAN
 │   │   ├── RssiChart.kt           # Gráfica MPAndroidChart de RSSI histórico
 │   │   ├── RoamingEventLog.kt     # Log visual de eventos de roaming/cambio de red
 │   │   ├── ReportGenerationFlow.kt# Diálogos de entrada y vista previa de PDF
@@ -109,6 +112,11 @@ com.abdapps.visorwifi
 - Las gráficas se crean como bitmaps off-screen de alta resolución y se insertan preservando su relación de aspecto dentro del área segura A4. Nunca usar dimensiones de píxel como puntos PDF ni recortar ejes o leyendas.
 - Las anotaciones de picos LAN/WAN y peor RSSI sólo pueden proceder de muestras originales válidas. Las referencias RSSI deben reutilizar los criterios de clasificación existentes; no introducir umbrales nuevos.
 - Las recomendaciones del PDF deben respaldarse en métricas del periodo: pérdida ICMP, latencia WAN, señal WiFi o eventos registrados. No indicar incidencias que no aparezcan en los datos.
+
+### 2.2 Historiales del monitor
+- `LatencyChart` representa exclusivamente las latencias ICMP LAN y WAN. `JitterChart` muestra por separado la diferencia absoluta entre respuestas consecutivas válidas.
+- Los históricos de latencia, jitter y RSSI usan líneas rectas entre muestras; no usar interpolación o suavizado que pueda ocultar variaciones reales.
+- El selector `MonitorViewModeSwitcher` sólo cambia la presentación local entre Resumen y Técnica; no debe afectar telemetría, servicio, métricas ni diagnóstico.
 
 ### 3. No Romper APIs Deprecadas de Compatibilidad
 - `WifiManager.connectionInfo` y `ScanResult.SSID` están anotados con `@Suppress("DEPRECATION")` intencionalmente para mantener compatibilidad desde `minSdk 26`. NO refactorizar ni eliminar estas llamadas a menos que sea explícitamente solicitado.
