@@ -232,7 +232,7 @@ Recomendaciones:
 | 0 | Auditoría y contratos | Documentación/modelos de diseño | Sin cambios funcionales; contratos aprobados. |
 | 1 | Motor puro LibreSpeed y pruebas JVM | `speedtest/domain/*`, `speedtest/librespeed/*` | Download/upload con bytes reales; timeout, cancelación y errores probados. |
 | 2 | Contexto Wi-Fi/móvil/VPN | `speedtest/connectivity/*` | **Completada:** snapshot identifica transporte, validación y cambio de red; limitaciones VPN documentadas. |
-| 3 | UI Speed Test | `SpeedTestViewModel`, `SpeedTestScreen`, `MainActivity` | Progreso real, cancelación y errores; Monitor sin regresión. |
+| 3 | UI Speed Test | `SpeedTestViewModel`, `SpeedTestScreen`, `MainActivity` | **Integrada y bloqueada con honestidad:** navegación, estados y conectividad listos; falta servidor LibreSpeed aprobado para tráfico real. |
 | 4 | Historial | Room entities/DAO/repository | Resultados sobreviven reinicio y pueden consultarse. |
 | 5 | Diagnóstico correlacionado | `CorrelatedDiagnosisEngine` | Separa observado/posible/confirmado sin causalidad infundada. |
 | 6 | PDF unificado | ensamblador, `ReportData`, `PdfGenerator` | Incluye resultado, servidor y contexto sin alterar métricas actuales. |

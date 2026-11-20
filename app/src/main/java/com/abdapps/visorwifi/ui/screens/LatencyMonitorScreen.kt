@@ -115,8 +115,7 @@ fun LatencyMonitorScreen(
     service: NetworkMonitorService?,
     isServiceRunning: Boolean,
     onStartService: () -> Unit,
-    onStopService: () -> Unit,
-    onOpenApLocator: () -> Unit = {}
+    onStopService: () -> Unit
 ) {
     val context = LocalContext.current
     var latestPoint by remember { mutableStateOf<LatencyPoint?>(null) }

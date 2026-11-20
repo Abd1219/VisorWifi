@@ -1,6 +1,5 @@
 package com.abdapps.visorwifi
 
-import com.abdapps.visorwifi.ui.screens.LatencyMonitorScreen
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -12,16 +11,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.abdapps.visorwifi.speedtest.connectivity.AndroidConnectivitySnapshotProvider
+import com.abdapps.visorwifi.ui.components.MainBottomNavigation
+import com.abdapps.visorwifi.ui.screens.ApLocatorScreen
+import com.abdapps.visorwifi.ui.screens.LatencyMonitorScreen
+import com.abdapps.visorwifi.ui.screens.ReportsScreen
+import com.abdapps.visorwifi.ui.screens.SpeedTestScreen
 import com.abdapps.visorwifi.ui.theme.VisorWifiTheme
+import com.abdapps.visorwifi.viewmodel.SpeedTestViewModel
+import com.abdapps.visorwifi.viewmodel.SpeedTestViewModelFactory
 
 /**
  * Actividad Principal de la aplicación VisorWifi.
@@ -36,7 +45,22 @@ import com.abdapps.visorwifi.ui.theme.VisorWifiTheme
  */
 enum class AppScreen {
     MONITOR,
-    AP_LOCATOR
+    AP_LOCATOR,
+    SPEED_TEST,
+    REPORTS;
+
+    val label: String get() = when (this) {
+        MONITOR -> "Monitor"
+        AP_LOCATOR -> "AP Locator"
+        SPEED_TEST -> "Speed Test"
+        REPORTS -> "Reportes"
+    }
+    val icon: String get() = when (this) {
+        MONITOR -> "◉"
+        AP_LOCATOR -> "⌖"
+        SPEED_TEST -> "◴"
+        REPORTS -> "▤"
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -61,11 +85,6 @@ class MainActivity : ComponentActivity() {
      * Estado observable que define si el servicio está actualmente activo en segundo plano.
      */
     private val isServiceRunningState = mutableStateOf(false)
-
-    /**
-     * Estado observable de navegación de pantalla.
-     */
-    private val currentScreen = mutableStateOf(AppScreen.MONITOR)
 
     /**
      * Interfaz de comunicación con el servicio que gestiona los eventos de enlace (Binding).
@@ -107,66 +126,38 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             VisorWifiTheme {
+                var currentScreen by rememberSaveable { mutableStateOf(AppScreen.MONITOR) }
+                val speedTestViewModel: SpeedTestViewModel = viewModel(
+                    factory = remember { SpeedTestViewModelFactory(AndroidConnectivitySnapshotProvider(applicationContext)) }
+                )
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    containerColor = Color(0xFF0B0E14)
+                    containerColor = Color(0xFF0B0E14),
+                    bottomBar = { MainBottomNavigation(currentScreen) { currentScreen = it } }
                 ) { innerPadding ->
-                    androidx.compose.foundation.layout.Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.fillMaxSize().padding(innerPadding)
                     ) {
-                        // ── Encabezado Principal y Selector de Modos ──────────────────
-                        androidx.compose.foundation.layout.Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
-                        ) {
-                            androidx.compose.material3.Text(
-                                text = "VISOR WIFI",
-                                fontSize = 22.sp,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
-                                color = Color(0xFF00F0FF),
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                letterSpacing = 2.sp
-                            )
-                            androidx.compose.material3.Text(
-                                text = "Diagnóstico y Análisis de Redes Wi-Fi",
-                                fontSize = 11.sp,
-                                color = Color(0xFF6F7B8B)
-                            )
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
-
-                            // Selector de Modos Neo-Brutalista
-                            com.abdapps.visorwifi.ui.components.ModeSwitcher(
-                                currentScreen = currentScreen.value,
-                                onScreenSelected = { screen -> currentScreen.value = screen }
-                            )
-                        }
-
-                        // ── Contenido de la Pantalla Activa ───────────────────────────
-                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
-                            when (currentScreen.value) {
+                            when (currentScreen) {
                                 AppScreen.MONITOR -> {
                                     LatencyMonitorScreen(
                                         modifier = Modifier.fillMaxSize(),
                                         service = serviceInstance.value,
                                         isServiceRunning = isServiceRunningState.value,
                                         onStartService = { startMonitorService() },
-                                        onStopService = { stopMonitorService() },
-                                        onOpenApLocator = { currentScreen.value = AppScreen.AP_LOCATOR }
+                                        onStopService = { stopMonitorService() }
                                     )
                                 }
                                 AppScreen.AP_LOCATOR -> {
-                                    com.abdapps.visorwifi.ui.screens.ApLocatorScreen(
+                                    ApLocatorScreen(
                                         modifier = Modifier.fillMaxSize(),
                                         service = serviceInstance.value,
-                                        latestPoint = serviceInstance.value?.getHistoryCopy()?.lastOrNull(),
-                                        onNavigateBack = { currentScreen.value = AppScreen.MONITOR }
+                                        latestPoint = serviceInstance.value?.getHistoryCopy()?.lastOrNull()
                                     )
                                 }
+                                AppScreen.SPEED_TEST -> SpeedTestScreen(speedTestViewModel, Modifier.fillMaxSize())
+                                AppScreen.REPORTS -> ReportsScreen(Modifier.fillMaxSize())
                             }
-                        }
                     }
                 }
             }

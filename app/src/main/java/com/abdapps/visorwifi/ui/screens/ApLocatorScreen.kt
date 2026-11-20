@@ -24,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -70,14 +69,12 @@ import java.util.Locale
  * @param modifier     Modificador Compose.
  * @param service      Instancia activa del servicio de monitoreo (opcional).
  * @param latestPoint  Último punto telemétrico instantáneo emitido por el servicio (opcional).
- * @param onNavigateBack Callback para regresar a la pantalla principal de monitoreo.
  */
 @Composable
 fun ApLocatorScreen(
     modifier: Modifier = Modifier,
     service: NetworkMonitorService? = null,
-    latestPoint: LatencyPoint? = null,
-    onNavigateBack: () -> Unit = {}
+    latestPoint: LatencyPoint? = null
 ) {
     val context = LocalContext.current
     val locatorViewModel: ApLocatorViewModel = viewModel()
@@ -142,7 +139,7 @@ fun ApLocatorScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
 
-        // ── Cabecera AP Locator con Botón de Regreso ──────────────────────────
+        // ── Cabecera AP Locator ───────────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -162,14 +159,6 @@ fun ApLocatorScreen(
                     fontSize = 12.sp,
                     color = Color(0xFF8E9AA8)
                 )
-            }
-
-            OutlinedButton(
-                onClick = onNavigateBack,
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text("VOLVER", fontSize = 11.sp, color = Color(0xFF8E9AA8), fontWeight = FontWeight.Bold)
             }
         }
 
