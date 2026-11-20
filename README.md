@@ -26,6 +26,7 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   **Calculadora de Confianza (0–100%)**: Evalúa 5 factores clave (cantidad de muestras, rango RSSI, varianza de zona de pico, cobertura angular y consistencia) para informar la fiabilidad de la medición.
     *   **Historial de Puntos de Medición**: Registra las estimaciones por posición física durante la sesión para comparación en campo.
 *   **Diagnóstico heurístico de red**: El monitor y los reportes usan reglas deterministas basadas en latencia ICMP, RSSI, jitter y pérdida. No hay IA implementada ni conectada al flujo actual. Bajo `engine/ia` se conserva un prototipo de puntuación heurística no utilizado; una IA real queda como trabajo futuro.
+*   **Contexto de conectividad para Speed Test (Fase 2, sin UI todavía)**: El proveedor independiente identifica la ruta efectiva de la app (Wi-Fi, datos móviles, VPN, otra o ninguna), Internet disponible/validado, uso medido y portal cautivo. También expone un `Flow` cancelable de cambios de red y datos Wi-Fi únicamente cuando Android y los permisos los permiten. No altera el monitor actual ni inicia/cancela mediciones automáticamente.
 *   **Generador Profesional de Reportes PDF**:
     *   Genera un reporte técnico V5 de tres páginas: resumen ejecutivo y diagnóstico, métricas detalladas, y evidencia gráfica con eventos, observaciones y firmas.
     *   Conserva las métricas del periodo (LAN, WAN, pérdida ICMP, jitter, RSSI, PHY, banda, roaming y TCP complementario) sin modificar los cálculos de monitoreo ni el diagnóstico.
@@ -59,6 +60,7 @@ Construida bajo los estándares modernos de desarrollo de Android con **Jetpack 
     *   `Service` (Foreground Service persistente)
     *   `NotificationManager` & `NotificationChannel` (API 26+)
     *   `WifiManager` & `WifiInfo` (Telemetría de enlace)
+    *   `ConnectivityManager` & `NetworkCapabilities` (contexto independiente de Speed Test)
     *   `ServiceConnection` (Binding y sincronización con estados Compose)
 *   **Visualización**: [MPAndroidChart](https://github.com/PhilJay/MPAndroidChart) y Canvas nativo de Compose para la brújula interactiva
 
@@ -76,6 +78,7 @@ El código fuente está completamente documentado y comentado en español bajo e
 *   **Servicio & Proveedores de Datos**:
     *   [NetworkMonitorService.kt](app/src/main/java/com/abdapps/visorwifi/NetworkMonitorService.kt): Monitoreo a 1Hz, fallbacks TCP, búfer circular e historial de roaming.
     *   [WifiInfoProvider.kt](app/src/main/java/com/abdapps/visorwifi/provider/WifiInfoProvider.kt): Consultas instantáneas de red desacopladas del servicio.
+    *   [ConnectivitySnapshotProvider.kt](app/src/main/java/com/abdapps/visorwifi/speedtest/connectivity/ConnectivitySnapshotProvider.kt): Snapshot y observación cancelable de conectividad para una futura pantalla Speed Test.
     *   [SensorOrientationManager.kt](app/src/main/java/com/abdapps/visorwifi/aplocator/SensorOrientationManager.kt): Gestor de sensores de acelerómetro y magnetómetro con suavizado de paso bajo.
 *   **Motor AP Locator & Diagnóstico**:
     *   [RssiDirectionAnalyzer.kt](app/src/main/java/com/abdapps/visorwifi/engine/aplocator/RssiDirectionAnalyzer.kt): Algoritmo determinista puro de filtrado y estimación angular.

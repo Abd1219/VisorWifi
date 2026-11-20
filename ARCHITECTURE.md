@@ -23,7 +23,7 @@ VisorWifi organiza el código por responsabilidades (UI, ViewModels, motores y a
         ▼
 [ Capa de Servicios y Proveedores de Datos ]
   NetworkMonitorService (1Hz Flow)  │  WifiInfoProvider (Consulta Desacoplada)
-  SensorOrientationManager (Sensores)│  WifiManager & ConnectivityManager
+  SensorOrientationManager (Sensores)│  AndroidConnectivitySnapshotProvider (Speed Test Fase 2)
 ```
 
 ---
@@ -67,6 +67,11 @@ Cuando el usuario entra directamente a la pantalla de **AP Locator** sin tener i
 - **Técnica:** presenta tarjetas LAN/WAN, históricos de latencia y RSSI, `JitterChart` y el registro de roaming.
 
 `JitterChart` calcula, para cada par consecutivo de respuestas ICMP válidas, `abs(actual - anterior)`. LAN y WAN permanecen como series independientes y el jitter se renderiza fuera de `LatencyChart` para no mezclar escalas. Las tres gráficas usan segmentos lineales: no se interpola ni suaviza telemetría.
+
+### 2.5 Contexto de conectividad para Speed Test (Fase 2)
+`AndroidConnectivitySnapshotProvider` está aislado en `speedtest/connectivity`. Entrega una fotografía inmutable de la red por defecto y un `Flow` que usa un `NetworkCallback` por colector; `awaitClose` libera el callback al cancelar la observación. Distingue el transporte efectivo (`WIFI`, `CELLULAR`, `VPN`, `OTHER`, `NONE`) de los transportes físicos reportados, Internet disponible/validado, uso medido y portal cautivo.
+
+La información Wi-Fi se lee sin solicitar escaneos y usa campos nullable si Android no la proporciona. Para proteger la precisión, la ausencia de permisos de ubicación o información del sistema se representa explícitamente y no se fabrican SSID, BSSID, RSSI ni generación móvil. Una VPN puede ocultar su portador físico: la API pública no permite asociar de forma fiable la VPN por defecto con un Wi-Fi o celular concreto, por lo que no se infiere. Este proveedor todavía no modifica, inicia ni cancela el monitor o el motor Speed Test.
 
 ---
 
